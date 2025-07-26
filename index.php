@@ -45,6 +45,109 @@ function getTimeAgo($datetime) {
     return floor($time/86400) . ' ngày trước';
 }
 
+function getUserRealmProgress($mysqli, $user_id) {
+    $result = $mysqli->query("SELECT * FROM user_realm_progress WHERE user_id = $user_id");
+    if ($result && $result->num_rows > 0) {
+        return $result->fetch_assoc();
+    }
+    
+    // Create initial progress if not exists
+    $mysqli->query("INSERT INTO user_realm_progress (user_id) VALUES ($user_id)");
+    return [
+        'user_id' => $user_id,
+        'current_qi' => 0,
+        'qi_needed' => 100,
+        'realm' => 'Luyện Khí',
+        'realm_stage' => 1,
+        'total_qi_earned' => 0
+    ];
+}
+
+function addQi($mysqli, $user_id, $amount = 1) {
+    $progress = getUserRealmProgress($mysqli, $user_id);
+    $new_qi = $progress['current_qi'] + $amount;
+    $new_total = $progress['total_qi_earned'] + $amount;
+    
+    // Check for realm advancement
+    if ($new_qi >= $progress['qi_needed']) {
+        $new_stage = $progress['realm_stage'] + 1;
+        $new_realm = $progress['realm'];
+        $new_qi_needed = $progress['qi_needed'];
+        
+        // Realm progression system
+        $realms = [
+            'Luyện Khí' => 10,
+            'Trúc Cơ' => 10, 
+            'Kim Đan' => 10,
+            'Nguyên Anh' => 10,
+            'Hóa Thần' => 10,
+            'Luyện Hư' => 10,
+            'Hợp Thể' => 10,
+            'Đại Thừa' => 10,
+            'Thiên Tiên' => 10,
+            'Chân Tiên' => 1
+        ];
+        
+        if ($new_stage > $realms[$new_realm] && $new_realm != 'Chân Tiên') {
+            $realm_keys = array_keys($realms);
+            $current_index = array_search($new_realm, $realm_keys);
+            if ($current_index !== false && $current_index < count($realm_keys) - 1) {
+                $new_realm = $realm_keys[$current_index + 1];
+                $new_stage = 1;
+                $new_qi_needed = floor($new_qi_needed * 1.5); // Increase requirement
+            }
+        }
+        
+        $new_qi = 0; // Reset qi after advancement
+        
+        $mysqli->query("UPDATE user_realm_progress SET 
+                       current_qi = $new_qi, 
+                       qi_needed = $new_qi_needed,
+                       realm = '$new_realm', 
+                       realm_stage = $new_stage,
+                       total_qi_earned = $new_total 
+                       WHERE user_id = $user_id");
+        
+        // Update user table as well
+        $mysqli->query("UPDATE users SET realm = '$new_realm', realm_stage = $new_stage WHERE id = $user_id");
+        
+        return ['advanced' => true, 'new_realm' => $new_realm, 'new_stage' => $new_stage];
+    } else {
+        $mysqli->query("UPDATE user_realm_progress SET 
+                       current_qi = $new_qi,
+                       total_qi_earned = $new_total 
+                       WHERE user_id = $user_id");
+        
+        return ['advanced' => false];
+    }
+}
+
+function getUserRoleTag($role) {
+    switch($role) {
+        case 'admin': return '<span style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">👑 ADMIN</span>';
+        case 'translator': return '<span style="background: linear-gradient(45deg, #4834d4, #686de0); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">📚 NHÀ DỊCH</span>';
+        default: return '';
+    }
+}
+
+function getRealmBadge($realm, $stage) {
+    $colors = [
+        'Luyện Khí' => '#8e44ad',
+        'Trúc Cơ' => '#3498db', 
+        'Kim Đan' => '#f39c12',
+        'Nguyên Anh' => '#e74c3c',
+        'Hóa Thần' => '#9b59b6',
+        'Luyện Hư' => '#34495e',
+        'Hợp Thể' => '#16a085',
+        'Đại Thừa' => '#e67e22',
+        'Thiên Tiên' => '#f1c40f',
+        'Chân Tiên' => '#ecf0f1'
+    ];
+    
+    $color = $colors[$realm] ?? '#95a5a6';
+    return '<span style="background: ' . $color . '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">⚡ ' . $realm . ' ' . $stage . '</span>';
+}
+
 // Get current user
 $user = getUser($mysqli);
 $page = $_GET['page'] ?? 'home';
@@ -60,6 +163,39 @@ if ($user && isset($_GET['like_comment'])) {
     } else {
         $mysqli->query("INSERT INTO comment_likes (comment_id, user_id) VALUES ($comment_id, $user_id)");
     }
+    
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+
+// Handle add comment
+if ($user && $_POST && isset($_POST['add_comment'])) {
+    $content = sanitize($_POST['content']);
+    $comic_id = isset($_POST['comic_id']) ? (int)$_POST['comic_id'] : null;
+    $chapter_id = isset($_POST['chapter_id']) ? (int)$_POST['chapter_id'] : null;
+    $parent_id = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
+    
+    if (!empty($content) && ($comic_id || $chapter_id)) {
+        $stmt = $mysqli->prepare("INSERT INTO comments (user_id, comic_id, chapter_id, parent_id, content) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("iiiis", $user['id'], $comic_id, $chapter_id, $parent_id, $content);
+        
+        if ($stmt->execute()) {
+            $_SESSION['notification'] = ['type' => 'success', 'message' => 'Đã thêm bình luận thành công!'];
+        } else {
+            $_SESSION['notification'] = ['type' => 'error', 'message' => 'Có lỗi khi thêm bình luận!'];
+        }
+    }
+    
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+
+// Handle pin/unpin comment (admin only)
+if ($user && in_array($user['role'], ['admin']) && isset($_GET['toggle_pin'])) {
+    $comment_id = (int)$_GET['toggle_pin'];
+    $current_pin = $mysqli->query("SELECT is_pinned FROM comments WHERE id = $comment_id")->fetch_assoc();
+    $new_pin = $current_pin['is_pinned'] ? 0 : 1;
+    $mysqli->query("UPDATE comments SET is_pinned = $new_pin WHERE id = $comment_id");
     
     header("Location: " . $_SERVER['HTTP_REFERER']);
     exit;
@@ -145,9 +281,13 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS comments (
     user_id INT NOT NULL,
     comic_id INT,
     chapter_id INT,
-    parent_id INT,
+    parent_id INT DEFAULT NULL,
     content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_pinned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_comic_chapter (comic_id, chapter_id),
+    INDEX idx_parent (parent_id)
 )");
 
 $mysqli->query("CREATE TABLE IF NOT EXISTS comment_likes (
@@ -156,6 +296,19 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS comment_likes (
     comment_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_like (user_id, comment_id)
+)");
+
+$mysqli->query("CREATE TABLE IF NOT EXISTS user_realm_progress (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    current_qi INT DEFAULT 0,
+    qi_needed INT DEFAULT 100,
+    realm VARCHAR(50) DEFAULT 'Luyện Khí',
+    realm_stage INT DEFAULT 1,
+    total_qi_earned INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user (user_id)
 )");
 
 // Create default admin user if not exists
