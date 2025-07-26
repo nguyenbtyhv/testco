@@ -45,6 +45,211 @@ function getTimeAgo($datetime) {
     return floor($time/86400) . ' ngày trước';
 }
 
+function getUserRealmProgress($mysqli, $user_id) {
+    $result = $mysqli->query("SELECT * FROM user_realm_progress WHERE user_id = $user_id");
+    if ($result && $result->num_rows > 0) {
+        return $result->fetch_assoc();
+    }
+    
+    // Create initial progress if not exists
+    $mysqli->query("INSERT INTO user_realm_progress (user_id, qi_needed) VALUES ($user_id, 10)");
+    return [
+        'user_id' => $user_id,
+        'current_qi' => 0,
+        'qi_needed' => 10,
+        'realm' => 'Luyện Khí',
+        'realm_stage' => 1,
+        'total_qi_earned' => 0
+    ];
+}
+
+function addQi($mysqli, $user_id, $amount = 1) {
+    $progress = getUserRealmProgress($mysqli, $user_id);
+    $new_qi = $progress['current_qi'] + $amount;
+    $new_total = $progress['total_qi_earned'] + $amount;
+    
+    // Check for realm advancement
+    if ($new_qi >= $progress['qi_needed']) {
+        $new_stage = $progress['realm_stage'] + 1;
+        $new_realm = $progress['realm'];
+        $new_qi_needed = $progress['qi_needed'];
+        
+        // Realm progression system - theo yêu cầu của bạn
+        $realms = [
+            'Luyện Khí' => 10,
+            'Trúc Cơ' => 10, 
+            'Kết Đan' => 10,
+            'Nguyên Anh' => 10,
+            'Hóa Thần' => 10,
+            'Luyện Hư' => 10,
+            'Hợp Thể' => 10,
+            'Đại Thừa' => 10,
+            'Độ Kiếp' => 1
+        ];
+        
+        // Base qi requirements for each realm (increases exponentially)
+        $base_qi_requirements = [
+            'Luyện Khí' => 10,
+            'Trúc Cơ' => 25, 
+            'Kết Đan' => 50,
+            'Nguyên Anh' => 100,
+            'Hóa Thần' => 200,
+            'Luyện Hư' => 400,
+            'Hợp Thể' => 800,
+            'Đại Thừa' => 1600,
+            'Độ Kiếp' => 3200
+        ];
+        
+        if ($new_stage > $realms[$new_realm] && $new_realm != 'Độ Kiếp') {
+            $realm_keys = array_keys($realms);
+            $current_index = array_search($new_realm, $realm_keys);
+            if ($current_index !== false && $current_index < count($realm_keys) - 1) {
+                $new_realm = $realm_keys[$current_index + 1];
+                $new_stage = 1;
+                $new_qi_needed = $base_qi_requirements[$new_realm]; // Set base requirement for new realm
+            }
+        } else {
+            // Increase qi needed for next stage within same realm
+            $base_qi = $base_qi_requirements[$new_realm];
+            $new_qi_needed = floor($base_qi * (1 + ($new_stage - 1) * 0.2)); // 20% increase per stage
+        }
+        
+        $new_qi = 0; // Reset qi after advancement
+        
+        $mysqli->query("UPDATE user_realm_progress SET 
+                       current_qi = $new_qi, 
+                       qi_needed = $new_qi_needed,
+                       realm = '$new_realm', 
+                       realm_stage = $new_stage,
+                       total_qi_earned = $new_total 
+                       WHERE user_id = $user_id");
+        
+        // Update user table as well
+        $mysqli->query("UPDATE users SET realm = '$new_realm', realm_stage = $new_stage WHERE id = $user_id");
+        
+        return ['advanced' => true, 'new_realm' => $new_realm, 'new_stage' => $new_stage];
+    } else {
+        $mysqli->query("UPDATE user_realm_progress SET 
+                       current_qi = $new_qi,
+                       total_qi_earned = $new_total 
+                       WHERE user_id = $user_id");
+        
+        return ['advanced' => false];
+    }
+}
+
+function getUserRoleTag($role) {
+    switch($role) {
+        case 'admin': return '<span style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">👑 ADMIN</span>';
+        case 'translator': return '<span style="background: linear-gradient(45deg, #4834d4, #686de0); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">📚 NHÀ DỊCH</span>';
+        default: return '';
+    }
+}
+
+function getRealmBadge($realm, $stage) {
+    $colors = [
+        'Luyện Khí' => '#8e44ad',    // Tím nhạt - cảnh giới thấp nhất
+        'Trúc Cơ' => '#3498db',     // Xanh dương - cảnh giới xây dựng nền tảng
+        'Kết Đan' => '#f39c12',     // Vàng - cảnh giới kết tụ kim đan  
+        'Nguyên Anh' => '#e74c3c',  // Đỏ - cảnh giới linh hồn
+        'Hóa Thần' => '#9b59b6',    // Tím đậm - cảnh giới biến hóa
+        'Luyện Hư' => '#34495e',    // Xám đen - cảnh giới hư vô
+        'Hợp Thể' => '#16a085',     // Xanh lục - cảnh giới hợp nhất
+        'Đại Thừa' => '#e67e22',    // Cam đậm - cảnh giới đại thành
+        'Độ Kiếp' => '#ecf0f1'      // Trắng vàng - cảnh giới tối thượng
+    ];
+    
+    $icons = [
+        'Luyện Khí' => '🌱',
+        'Trúc Cơ' => '🏗️', 
+        'Kết Đan' => '💊',
+        'Nguyên Anh' => '👻',
+        'Hóa Thần' => '🔮',
+        'Luyện Hư' => '🌌',
+        'Hợp Thể' => '⚡',
+        'Đại Thừa' => '🌟',
+        'Độ Kiếp' => '⚡'
+    ];
+    
+    $color = $colors[$realm] ?? '#95a5a6';
+    $icon = $icons[$realm] ?? '⚡';
+    
+    // Special styling for highest realm
+    if ($realm == 'Độ Kiếp') {
+        return '<span style="background: linear-gradient(45deg, #f1c40f, #e67e22); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; box-shadow: 0 0 10px rgba(241, 196, 15, 0.5);">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
+    }
+    
+    return '<span style="background: ' . $color . '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
+}
+
+function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0) {
+    $where_clause = "WHERE parent_id " . ($parent_id ? "= $parent_id" : "IS NULL");
+    if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
+    if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
+    
+    $comments = $mysqli->query("
+        SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
+               (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as like_count,
+               " . ($user ? "(SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = {$user['id']}) as user_liked" : "0 as user_liked") . "
+        FROM comments c 
+        JOIN users u ON u.id = c.user_id 
+        $where_clause
+        ORDER BY c.is_pinned DESC, c.created_at DESC
+    ");
+    
+    if (!$comments || $comments->num_rows == 0) {
+        return;
+    }
+    
+    $indent = $level * 40;
+    
+    while ($comment = $comments->fetch_assoc()) {
+        $can_pin = $user && in_array($user['role'], ['admin']);
+        $pin_text = $comment['is_pinned'] ? 'Bỏ ghim' : 'Ghim';
+        $pin_icon = $comment['is_pinned'] ? '📌' : '';
+        
+        echo '<div style="margin-left: ' . $indent . 'px; border-left: ' . ($level > 0 ? '2px solid rgba(255,255,255,0.2)' : 'none') . '; padding-left: ' . ($level > 0 ? '15px' : '0') . '; margin-bottom: 1.5rem;">
+                <div style="background: rgba(255,255,255,' . ($comment['is_pinned'] ? '0.15' : '0.1') . '); padding: 1rem; border-radius: 10px; border: ' . ($comment['is_pinned'] ? '2px solid #f1c40f' : '1px solid rgba(255,255,255,0.2)') . ';">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <strong>' . sanitize($comment['username']) . '</strong>
+                        ' . getUserRoleTag($comment['role']) . '
+                        ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '
+                        ' . $pin_icon . '
+                        <span style="color: rgba(255,255,255,0.6); font-size: 0.8em;">' . getTimeAgo($comment['created_at']) . '</span>
+                    </div>
+                    <div style="margin-bottom: 1rem; line-height: 1.5;">
+                        ' . nl2br(sanitize($comment['content'])) . '
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        ' . ($user ? '<a href="?like_comment=' . $comment['id'] . '" style="color: ' . ($comment['user_liked'] ? '#e74c3c' : 'rgba(255,255,255,0.7)') . '; text-decoration: none;">❤️ ' . $comment['like_count'] . '</a>' : '<span style="color: rgba(255,255,255,0.7);">❤️ ' . $comment['like_count'] . '</span>') . '
+                        ' . ($user ? '<a href="#" onclick="toggleReplyForm(' . $comment['id'] . ')" style="color: rgba(255,255,255,0.7); text-decoration: none;">💬 Trả lời</a>' : '') . '
+                        ' . ($can_pin ? '<a href="?toggle_pin=' . $comment['id'] . '" style="color: rgba(255,255,255,0.7); text-decoration: none;">📌 ' . $pin_text . '</a>' : '') . '
+                    </div>
+                </div>';
+        
+        // Reply form
+        if ($user) {
+            echo '<div id="reply-form-' . $comment['id'] . '" style="display: none; margin-top: 1rem; margin-left: 20px;">
+                    <form method="POST" style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 10px;">
+                        <input type="hidden" name="parent_id" value="' . $comment['id'] . '">
+                        ' . ($comic_id ? '<input type="hidden" name="comic_id" value="' . $comic_id . '">' : '') . '
+                        ' . ($chapter_id ? '<input type="hidden" name="chapter_id" value="' . $chapter_id . '">' : '') . '
+                        <textarea name="content" class="form-input" placeholder="Viết trả lời..." rows="3" required style="margin-bottom: 0.5rem;"></textarea>
+                        <div style="text-align: right;">
+                            <button type="button" onclick="toggleReplyForm(' . $comment['id'] . ')" class="btn btn-outline" style="margin-right: 0.5rem;">Hủy</button>
+                            <button type="submit" name="add_comment" class="btn btn-primary">Trả lời</button>
+                        </div>
+                    </form>
+                  </div>';
+        }
+        
+        // Display nested replies
+        displayComments($mysqli, $user, $comic_id, $chapter_id, $comment['id'], $level + 1);
+        
+        echo '</div>';
+    }
+}
+
 // Get current user
 $user = getUser($mysqli);
 $page = $_GET['page'] ?? 'home';
@@ -60,6 +265,39 @@ if ($user && isset($_GET['like_comment'])) {
     } else {
         $mysqli->query("INSERT INTO comment_likes (comment_id, user_id) VALUES ($comment_id, $user_id)");
     }
+    
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+
+// Handle add comment
+if ($user && $_POST && isset($_POST['add_comment'])) {
+    $content = sanitize($_POST['content']);
+    $comic_id = isset($_POST['comic_id']) ? (int)$_POST['comic_id'] : null;
+    $chapter_id = isset($_POST['chapter_id']) ? (int)$_POST['chapter_id'] : null;
+    $parent_id = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
+    
+    if (!empty($content) && ($comic_id || $chapter_id)) {
+        $stmt = $mysqli->prepare("INSERT INTO comments (user_id, comic_id, chapter_id, parent_id, content) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("iiiis", $user['id'], $comic_id, $chapter_id, $parent_id, $content);
+        
+        if ($stmt->execute()) {
+            $_SESSION['notification'] = ['type' => 'success', 'message' => 'Đã thêm bình luận thành công!'];
+        } else {
+            $_SESSION['notification'] = ['type' => 'error', 'message' => 'Có lỗi khi thêm bình luận!'];
+        }
+    }
+    
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+
+// Handle pin/unpin comment (admin only)
+if ($user && in_array($user['role'], ['admin']) && isset($_GET['toggle_pin'])) {
+    $comment_id = (int)$_GET['toggle_pin'];
+    $current_pin = $mysqli->query("SELECT is_pinned FROM comments WHERE id = $comment_id")->fetch_assoc();
+    $new_pin = $current_pin['is_pinned'] ? 0 : 1;
+    $mysqli->query("UPDATE comments SET is_pinned = $new_pin WHERE id = $comment_id");
     
     header("Location: " . $_SERVER['HTTP_REFERER']);
     exit;
@@ -145,9 +383,13 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS comments (
     user_id INT NOT NULL,
     comic_id INT,
     chapter_id INT,
-    parent_id INT,
+    parent_id INT DEFAULT NULL,
     content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_pinned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_comic_chapter (comic_id, chapter_id),
+    INDEX idx_parent (parent_id)
 )");
 
 $mysqli->query("CREATE TABLE IF NOT EXISTS comment_likes (
@@ -158,12 +400,38 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS comment_likes (
     UNIQUE KEY unique_like (user_id, comment_id)
 )");
 
+$mysqli->query("CREATE TABLE IF NOT EXISTS user_realm_progress (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    current_qi INT DEFAULT 0,
+    qi_needed INT DEFAULT 10,
+    realm VARCHAR(50) DEFAULT 'Luyện Khí',
+    realm_stage INT DEFAULT 1,
+    total_qi_earned INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user (user_id)
+)");
+
 // Create default admin user if not exists
 $admin_check = $mysqli->query("SELECT id FROM users WHERE username = 'admin'");
 if (!$admin_check || $admin_check->num_rows == 0) {
     $admin_password = password_hash('admin123', PASSWORD_DEFAULT);
     $mysqli->query("INSERT INTO users (username, email, password, role, coins, realm, realm_stage) 
-                   VALUES ('admin', 'admin@manga.com', '$admin_password', 'admin', 10000, 'Tiên Nhân', 10)");
+                   VALUES ('admin', 'admin@manga.com', '$admin_password', 'admin', 10000, 'Độ Kiếp', 1)");
+}
+
+// Initialize realm progress for existing users
+$users_without_progress = $mysqli->query("
+    SELECT u.id FROM users u 
+    LEFT JOIN user_realm_progress urp ON u.id = urp.user_id 
+    WHERE urp.user_id IS NULL
+");
+if ($users_without_progress && $users_without_progress->num_rows > 0) {
+    while ($user_row = $users_without_progress->fetch_assoc()) {
+        $mysqli->query("INSERT INTO user_realm_progress (user_id, realm, realm_stage, qi_needed) 
+                       VALUES ({$user_row['id']}, 'Luyện Khí', 1, 10)");
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -711,6 +979,39 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                 } else {
                     echo '<div class="notification warning">Chưa có chương nào.</div>';
                 }
+                
+                // Comments section for comic
+                echo '<div style="margin-top: 3rem;">
+                        <h2 class="section-title">Bình Luận</h2>';
+                
+                // Display session notifications
+                if (isset($_SESSION['notification'])) {
+                    $notif = $_SESSION['notification'];
+                    echo '<div class="notification ' . $notif['type'] . '">' . $notif['message'] . '</div>';
+                    unset($_SESSION['notification']);
+                }
+                
+                // Comment form
+                if ($user) {
+                    echo '<form method="POST" style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                            <input type="hidden" name="comic_id" value="' . $comic_id . '">
+                            <div class="form-group">
+                                <textarea name="content" class="form-input" placeholder="Viết bình luận..." rows="4" required></textarea>
+                            </div>
+                            <div style="text-align: right;">
+                                <button type="submit" name="add_comment" class="btn btn-primary">Đăng bình luận</button>
+                            </div>
+                          </form>';
+                } else {
+                    echo '<div class="notification warning">
+                            <a href="?page=login">Đăng nhập</a> để bình luận.
+                          </div>';
+                }
+                
+                // Display comments
+                displayComments($mysqli, $user, $comic_id);
+                
+                echo '</div>';
                 break;
 
             case 'chapter':
@@ -739,8 +1040,51 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                 
                 // Update view count and reading history
                 $mysqli->query("UPDATE chapters SET views = views + 1 WHERE id = $chapter_id");
+                
+                // Check if user has already read this chapter today for qi reward
+                $today = date('Y-m-d');
+                $qi_check = $mysqli->query("
+                    SELECT id FROM read_history 
+                    WHERE user_id = {$user['id']} AND chapter_id = $chapter_id 
+                    AND DATE(created_at) = '$today'
+                ");
+                
+                $qi_gained = false;
+                $realm_advancement = null;
+                
+                // Award qi if first read today
+                if (!$qi_check || $qi_check->num_rows == 0) {
+                    $realm_advancement = addQi($mysqli, $user['id'], 1);
+                    $qi_gained = true;
+                    
+                    // Store session notification for realm advancement
+                    if ($realm_advancement['advanced']) {
+                        $_SESSION['realm_advancement'] = [
+                            'realm' => $realm_advancement['new_realm'],
+                            'stage' => $realm_advancement['new_stage']
+                        ];
+                    }
+                }
+                
                 $mysqli->query("INSERT INTO read_history (user_id, chapter_id) VALUES ({$user['id']}, $chapter_id) 
                                ON DUPLICATE KEY UPDATE updated_at = NOW()");
+                
+                // Display realm advancement notification
+                if (isset($_SESSION['realm_advancement'])) {
+                    $advancement = $_SESSION['realm_advancement'];
+                    echo '<div class="notification success" style="background: linear-gradient(45deg, #f1c40f, #e67e22); border: none; text-align: center; font-weight: bold; font-size: 1.1em;">
+                            🎉 Chúc mừng! Bạn đã thăng cảnh giới lên ' . $advancement['realm'] . ' tầng ' . $advancement['stage'] . '! 🎉
+                          </div>';
+                    unset($_SESSION['realm_advancement']);
+                }
+                
+                // Display qi gained notification
+                if ($qi_gained) {
+                    $user_progress = getUserRealmProgress($mysqli, $user['id']);
+                    echo '<div class="notification success" style="text-align: center;">
+                            ⚡ Bạn đã nhận được 1 Linh Khí! (' . $user_progress['current_qi'] . '/' . $user_progress['qi_needed'] . ')
+                          </div>';
+                }
                 
                 echo '<h1 class="page-title">' . sanitize($chapter['comic_title']) . ' - ' . sanitize($chapter['chapter_title']) . '</h1>';
                 
@@ -761,6 +1105,39 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                 echo '<div style="text-align: center; margin-top: 2rem;">
                         <a href="?page=comic&id=' . $chapter['comic_id'] . '" class="btn btn-primary">Quay lại danh sách chương</a>
                       </div>';
+                
+                // Comments section for chapter
+                echo '<div style="margin-top: 3rem;">
+                        <h2 class="section-title">Bình Luận Chương</h2>';
+                
+                // Display session notifications
+                if (isset($_SESSION['notification'])) {
+                    $notif = $_SESSION['notification'];
+                    echo '<div class="notification ' . $notif['type'] . '">' . $notif['message'] . '</div>';
+                    unset($_SESSION['notification']);
+                }
+                
+                // Comment form
+                if ($user) {
+                    echo '<form method="POST" style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                            <input type="hidden" name="chapter_id" value="' . $chapter_id . '">
+                            <div class="form-group">
+                                <textarea name="content" class="form-input" placeholder="Viết bình luận về chương này..." rows="4" required></textarea>
+                            </div>
+                            <div style="text-align: right;">
+                                <button type="submit" name="add_comment" class="btn btn-primary">Đăng bình luận</button>
+                            </div>
+                          </form>';
+                } else {
+                    echo '<div class="notification warning">
+                            <a href="?page=login">Đăng nhập</a> để bình luận.
+                          </div>';
+                }
+                
+                // Display comments
+                displayComments($mysqli, $user, null, $chapter_id);
+                
+                echo '</div>';
                 break;
 
             case 'admin':
@@ -915,14 +1292,29 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                     break;
                 }
                 
+                $user_progress = getUserRealmProgress($mysqli, $user['id']);
+                
                 echo '<h1 class="page-title">Thông Tin Cá Nhân</h1>';
                 echo '<div class="admin-section">
                         <div style="text-align: center;">
-                            <h2>' . sanitize($user['username']) . '</h2>
+                            <h2>' . sanitize($user['username']) . ' ' . getUserRoleTag($user['role']) . '</h2>
                             <p><strong>Email:</strong> ' . sanitize($user['email'] ?: 'Chưa cập nhật') . '</p>
                             <p><strong>Vai trò:</strong> ' . sanitize($user['role']) . '</p>
                             <p><strong>Số xu:</strong> ' . number_format($user['coins']) . ' xu</p>
-                            <p><strong>Cảnh giới:</strong> ' . sanitize($user['realm']) . ' - ' . $user['realm_stage'] . '/10</p>
+                            
+                            <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(255,255,255,0.1); border-radius: 15px;">
+                                <h3>Tu Luyện Tiến Trình</h3>
+                                <p>' . getRealmBadge($user_progress['realm'], $user_progress['realm_stage']) . '</p>
+                                <div style="margin: 1rem 0;">
+                                    <strong>Linh Khí hiện tại:</strong> ' . $user_progress['current_qi'] . '/' . $user_progress['qi_needed'] . '
+                                </div>
+                                <div style="background: rgba(0,0,0,0.3); border-radius: 10px; height: 20px; margin: 1rem 0;">
+                                    <div style="background: linear-gradient(45deg, #4ecdc4, #44a08d); height: 100%; border-radius: 10px; width: ' . min(100, ($user_progress['current_qi'] / $user_progress['qi_needed']) * 100) . '%"></div>
+                                </div>
+                                <p><strong>Tổng Linh Khí kiếm được:</strong> ' . number_format($user_progress['total_qi_earned']) . '</p>
+                                <p style="color: rgba(255,255,255,0.7); font-size: 0.9em;">💡 Đọc chapter mỗi ngày để nhận Linh Khí và thăng cảnh giới!</p>
+                            </div>
+                            
                             <p><strong>Ngày tham gia:</strong> ' . date('d/m/Y', strtotime($user['created_at'])) . '</p>
                         </div>
                       </div>';
@@ -957,6 +1349,17 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                 });
             }, 3000);
         });
+        
+        // Toggle reply form
+        function toggleReplyForm(commentId) {
+            const form = document.getElementById('reply-form-' + commentId);
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+                form.querySelector('textarea').focus();
+            } else {
+                form.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
