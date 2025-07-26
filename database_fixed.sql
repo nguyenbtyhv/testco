@@ -197,7 +197,7 @@ ALTER TABLE `comics` ADD INDEX `idx_views` (`views`);
 ALTER TABLE `comics` ADD INDEX `idx_updated` (`updated_at`);
 ALTER TABLE `comics` ADD INDEX `idx_title_search` (`title`(50));
 ALTER TABLE `comics` ADD INDEX `idx_rating` (`rating`);
-ALTER TABLE `comics` ADD FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON SET NULL;
+ALTER TABLE `comics` ADD FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL;
 
 -- Indexes và foreign keys cho chapters
 ALTER TABLE `chapters` ADD INDEX `idx_comic_chapter` (`comic_id`, `chapter_number`);
