@@ -563,6 +563,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MangaHub - Website Đọc Truyện Tranh</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -571,16 +572,17 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: #fff;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            color: #1a202c;
             min-height: 100vh;
+            line-height: 1.6;
         }
         
         .header {
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-bottom: 1px solid #e2e8f0;
             padding: 1rem 0;
             position: sticky;
             top: 0;
@@ -588,42 +590,55 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         .navbar {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 2rem;
+            padding: 0 1.5rem;
         }
         
         .logo {
             font-size: 1.8rem;
-            font-weight: bold;
-            color: #fff;
+            font-weight: 800;
+            color: #2d3748;
             text-decoration: none;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .logo:hover {
+            color: #3182ce;
         }
         
         .nav-menu {
             display: flex;
             list-style: none;
-            gap: 2rem;
+            gap: 1.5rem;
+            margin: 0;
+            padding: 0;
         }
         
         .nav-link {
-            color: #fff;
+            color: #4a5568;
             text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            transition: all 0.3s ease;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 0.95rem;
         }
         
-        .nav-link:hover, .nav-link.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+        .nav-link:hover {
+            color: #3182ce;
+            background: #ebf8ff;
+        }
+        
+        .nav-link.active {
+            color: #3182ce;
+            background: #ebf8ff;
+            font-weight: 600;
         }
         
         .user-area {
@@ -632,21 +647,43 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             gap: 1rem;
         }
         
+        .user-area span {
+            color: #4a5568;
+            font-weight: 500;
+        }
+        
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: 0.625rem 1.25rem;
             border: none;
-            border-radius: 25px;
-            font-weight: 600;
+            border-radius: 6px;
+            font-weight: 500;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            background: #3182ce;
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .btn-primary:hover {
+            background: #2c5282;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-outline:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
         }
         
         .btn-primary:hover {
@@ -666,25 +703,36 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 2rem 1.5rem;
         }
         
         .page-title {
-            font-size: 2.5rem;
-            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
             margin-bottom: 2rem;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #2d3748;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .page-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: #3182ce;
+            border-radius: 2px;
         }
         
         .section-title {
             font-size: 1.5rem;
+            font-weight: 600;
             margin-bottom: 1.5rem;
-            color: #fff;
+            color: #2d3748;
             position: relative;
             padding-left: 1rem;
         }
@@ -696,34 +744,35 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             top: 0;
             width: 4px;
             height: 100%;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background: #3182ce;
             border-radius: 2px;
         }
         
         .comic-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1.5rem;
             margin-bottom: 3rem;
         }
         
         .comic-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
+            background: #ffffff;
+            border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
             transition: all 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .comic-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
         
         .comic-thumbnail {
             width: 100%;
-            height: 250px;
+            height: 240px;
             position: relative;
             overflow: hidden;
         }
@@ -736,7 +785,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         .comic-card:hover .comic-thumbnail img {
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
         
         .comic-info {
@@ -744,10 +793,10 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         .comic-title {
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: #fff;
+            color: #2d3748;
             line-height: 1.4;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -757,20 +806,131 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         
         .comic-meta {
             display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.8rem;
+            color: #718096;
+        }
+        
+        .comic-meta span {
+            display: block;
+        }
+        
+        /* Breadcrumb */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            color: #718096;
+        }
+        
+        .breadcrumb a {
+            color: #3182ce;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .breadcrumb-separator {
+            color: #cbd5e0;
+        }
+        
+        /* Search Bar */
+        .search-container {
+            max-width: 400px;
+            margin: 0 auto 2rem;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 25px;
+            background: #ffffff;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a0aec0;
+            width: 18px;
+            height: 18px;
+        }
+        
+        /* Page Header */
+        .page-header {
+            display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .filter-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .filter-tab {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #4a5568;
+            border-radius: 20px;
             font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.7);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .filter-tab:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
+        }
+        
+        .filter-tab.active {
+            background: #3182ce;
+            color: white;
+            border-color: #3182ce;
+        }
+        
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-tabs {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
         }
         
         .form-container {
             max-width: 400px;
             margin: 2rem auto;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            background: #ffffff;
             padding: 2rem;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
         }
         
         .form-group {
@@ -780,46 +940,49 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         .form-input {
             width: 100%;
             padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            color: #fff;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            color: #2d3748;
             font-size: 1rem;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
         }
         
         .form-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
+            color: #a0aec0;
         }
         
         .form-input:focus {
             outline: none;
-            border-color: #4ecdc4;
-            box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
         }
         
         .notification {
             padding: 1rem;
-            border-radius: 10px;
+            border-radius: 8px;
             margin-bottom: 1rem;
             border-left: 4px solid;
+            font-weight: 500;
         }
         
         .notification.success {
-            background: rgba(46, 204, 113, 0.2);
-            border-color: #2ecc71;
-            color: #2ecc71;
+            background: #f0fff4;
+            border-color: #38a169;
+            color: #2f855a;
         }
         
         .notification.error {
-            background: rgba(231, 76, 60, 0.2);
-            border-color: #e74c3c;
-            color: #e74c3c;
+            background: #fed7d7;
+            border-color: #e53e3e;
+            color: #c53030;
         }
         
         .notification.warning {
-            background: rgba(241, 196, 15, 0.2);
-            border-color: #f1c40f;
-            color: #f1c40f;
+            background: #fefcbf;
+            border-color: #d69e2e;
+            color: #b7791f;
         }
         
         .chapter-list {
@@ -908,6 +1071,68 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             }
         }
         
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 1rem;
+                flex-wrap: wrap;
+            }
+            
+            .nav-menu {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: #ffffff;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                flex-direction: column;
+                padding: 1rem;
+                gap: 0.5rem;
+            }
+            
+            .nav-menu.active {
+                display: flex;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .comic-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 1rem;
+            }
+            
+            .comic-thumbnail {
+                height: 200px;
+            }
+            
+            .page-title {
+                font-size: 1.5rem;
+                text-align: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .comic-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 0.75rem;
+            }
+            
+            .comic-thumbnail {
+                height: 180px;
+            }
+            
+            .comic-info {
+                padding: 0.75rem;
+            }
+            
+            .comic-title {
+                font-size: 0.85rem;
+            }
+        }
+
         /* Enhanced Comment Animations */
         @keyframes glow {
             0% { box-shadow: 0 0 15px rgba(241, 196, 15, 0.6); }
@@ -976,7 +1201,12 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
 <body>
     <header class="header">
         <nav class="navbar">
-            <a href="?page=home" class="logo">🌟 MangaHub</a>
+            <a href="?page=home" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                MangaHub
+            </a>
             <ul class="nav-menu">
                 <li><a href="?page=home" class="nav-link <?php echo $page == 'home' ? 'active' : ''; ?>">Trang chủ</a></li>
                 <li><a href="?page=favorites" class="nav-link <?php echo $page == 'favorites' ? 'active' : ''; ?>">Theo dõi</a></li>
@@ -1003,7 +1233,21 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         // Handle different pages
         switch ($page) {
             case 'home':
-                echo '<h1 class="page-title">Truyện Mới Nhất</h1>';
+                echo '<div class="search-container">
+                        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <input type="text" class="search-input" placeholder="Tìm kiếm truyện tranh...">
+                      </div>';
+                echo '<div class="page-header">
+                        <h1 class="page-title">Truyện Mới Nhất</h1>
+                        <div class="filter-tabs">
+                            <button class="filter-tab active">Tất cả</button>
+                            <button class="filter-tab">Mới cập nhật</button>
+                            <button class="filter-tab">Xem nhiều</button>
+                            <button class="filter-tab">Hoàn thành</button>
+                        </div>
+                      </div>';
                 echo '<div class="comic-grid">';
                 
                 $comics = $mysqli->query("SELECT * FROM comics ORDER BY updated_at DESC LIMIT 20");
