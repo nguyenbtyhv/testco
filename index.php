@@ -182,17 +182,114 @@ function getRealmBadge($realm, $stage) {
     return '<span style="background: ' . $color . '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
 }
 
+function getEnhancedRealmBadge($realm, $stage) {
+    $colors = [
+        'Luyện Khí' => ['#8e44ad', '#9b59b6'],
+        'Trúc Cơ' => ['#3498db', '#5dade2'],
+        'Kết Đan' => ['#f39c12', '#f4d03f'],
+        'Nguyên Anh' => ['#e74c3c', '#ec7063'],
+        'Hóa Thần' => ['#9b59b6', '#bb8fce'],
+        'Luyện Hư' => ['#34495e', '#5d6d7e'],
+        'Hợp Thể' => ['#16a085', '#48c9b0'],
+        'Đại Thừa' => ['#e67e22', '#f0b27a'],
+        'Độ Kiếp' => ['#f1c40f', '#e67e22']
+    ];
+    
+    $icons = [
+        'Luyện Khí' => '🌱',
+        'Trúc Cơ' => '🏗️', 
+        'Kết Đan' => '💊',
+        'Nguyên Anh' => '👻',
+        'Hóa Thần' => '🔮',
+        'Luyện Hư' => '🌌',
+        'Hợp Thể' => '⚡',
+        'Đại Thừa' => '🌟',
+        'Độ Kiếp' => '⚡'
+    ];
+    
+    $color = $colors[$realm] ?? ['#95a5a6', '#bdc3c7'];
+    $icon = $icons[$realm] ?? '⚡';
+    
+    // Special styling for highest realm with animation
+    if ($realm == 'Độ Kiếp') {
+        return '<span style="background: linear-gradient(45deg, #f1c40f, #e67e22); color: white; padding: 3px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold; box-shadow: 0 0 15px rgba(241, 196, 15, 0.6); animation: glow 2s ease-in-out infinite alternate; display: inline-flex; align-items: center; gap: 0.3rem;">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
+    }
+    
+    return '<span style="background: linear-gradient(45deg, ' . $color[0] . ', ' . $color[1] . '); color: white; padding: 3px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: inline-flex; align-items: center; gap: 0.3rem; transition: all 0.3s ease;" onmouseover="this.style.transform=\'scale(1.05)\'; this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.3)\';" onmouseout="this.style.transform=\'scale(1)\'; this.style.boxShadow=\'0 2px 8px rgba(0,0,0,0.2)\';">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
+}
+
+function generateUserAvatar($username, $realm, $realm_stage) {
+    // Generate color based on username
+    $colors = [
+        '#e74c3c', '#3498db', '#9b59b6', '#f39c12', '#2ecc71',
+        '#e67e22', '#1abc9c', '#34495e', '#f1c40f', '#e91e63'
+    ];
+    
+    $color_index = abs(crc32($username)) % count($colors);
+    $bg_color = $colors[$color_index];
+    
+    // Get realm-based border color
+    $realm_colors = [
+        'Luyện Khí' => '#8e44ad',
+        'Trúc Cơ' => '#3498db',
+        'Kết Đan' => '#f39c12',
+        'Nguyên Anh' => '#e74c3c',
+        'Hóa Thần' => '#9b59b6',
+        'Luyện Hư' => '#34495e',
+        'Hợp Thể' => '#16a085',
+        'Đại Thừa' => '#e67e22',
+        'Độ Kiếp' => '#f1c40f'
+    ];
+    
+    $border_color = $realm_colors[$realm] ?? '#95a5a6';
+    $initial = strtoupper(mb_substr($username, 0, 1));
+    
+    // Special effects for high-level realms
+    $special_effects = '';
+    if (in_array($realm, ['Đại Thừa', 'Độ Kiếp'])) {
+        $special_effects = 'box-shadow: 0 0 20px rgba(241, 196, 15, 0.5); animation: pulse 2s ease-in-out infinite alternate;';
+    }
+    
+    return '<div style="width: 45px; height: 45px; border-radius: 50%; background: ' . $bg_color . '; border: 3px solid ' . $border_color . '; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1.2em; ' . $special_effects . ' transition: all 0.3s ease;" onmouseover="this.style.transform=\'scale(1.1)\';" onmouseout="this.style.transform=\'scale(1)\';">' . $initial . '</div>';
+}
+
+function getUsernameStyle($role, $realm) {
+    $base_style = 'font-weight: bold; font-size: 1.1em; transition: all 0.3s ease;';
+    
+    // Role-based colors
+    $role_colors = [
+        'admin' => 'background: linear-gradient(45deg, #e74c3c, #c0392b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 10px rgba(231, 76, 60, 0.5);',
+        'translator' => 'background: linear-gradient(45deg, #3498db, #2980b9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 10px rgba(52, 152, 219, 0.5);',
+        'vip' => 'background: linear-gradient(45deg, #f39c12, #e67e22); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 10px rgba(243, 156, 18, 0.5);',
+        'user' => 'color: rgba(255, 255, 255, 0.9);'
+    ];
+    
+    // Realm-based enhancements
+    $realm_enhancements = '';
+    if (in_array($realm, ['Đại Thừa', 'Độ Kiếp'])) {
+        $realm_enhancements = ' text-shadow: 0 0 15px rgba(241, 196, 15, 0.7);';
+    }
+    
+    return $base_style . ' ' . ($role_colors[$role] ?? $role_colors['user']) . $realm_enhancements;
+}
+
 function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0) {
     $where_clause = "WHERE parent_id " . ($parent_id ? "= $parent_id" : "IS NULL");
     if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
     if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
     
+    // Enhanced query to get chapter info when available
+    $chapter_join = $chapter_id ? "LEFT JOIN chapters ch ON ch.id = c.chapter_id" : "";
+    $chapter_select = $chapter_id ? ", ch.chapter_title" : ", NULL as chapter_title";
+    
     $comments = $mysqli->query("
         SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as like_count,
                " . ($user ? "(SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = {$user['id']}) as user_liked" : "0 as user_liked") . "
+               $chapter_select
         FROM comments c 
         JOIN users u ON u.id = c.user_id 
+        $chapter_join
         $where_clause
         ORDER BY c.is_pinned DESC, c.created_at DESC
     ");
@@ -201,29 +298,55 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
         return;
     }
     
-    $indent = $level * 40;
+    $indent = $level * 20;
     
     while ($comment = $comments->fetch_assoc()) {
         $can_pin = $user && in_array($user['role'], ['admin']);
         $pin_text = $comment['is_pinned'] ? 'Bỏ ghim' : 'Ghim';
         $pin_icon = $comment['is_pinned'] ? '📌' : '';
         
-        echo '<div style="margin-left: ' . $indent . 'px; border-left: ' . ($level > 0 ? '2px solid rgba(255,255,255,0.2)' : 'none') . '; padding-left: ' . ($level > 0 ? '15px' : '0') . '; margin-bottom: 1.5rem;">
-                <div style="background: rgba(255,255,255,' . ($comment['is_pinned'] ? '0.15' : '0.1') . '); padding: 1rem; border-radius: 10px; border: ' . ($comment['is_pinned'] ? '2px solid #f1c40f' : '1px solid rgba(255,255,255,0.2)') . ';">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <strong>' . sanitize($comment['username']) . '</strong>
-                        ' . getUserRoleTag($comment['role']) . '
-                        ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '
-                        ' . $pin_icon . '
-                        <span style="color: rgba(255,255,255,0.6); font-size: 0.8em;">' . getTimeAgo($comment['created_at']) . '</span>
-                    </div>
-                    <div style="margin-bottom: 1rem; line-height: 1.5;">
-                        ' . nl2br(sanitize($comment['content'])) . '
-                    </div>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        ' . ($user ? '<a href="?like_comment=' . $comment['id'] . '" style="color: ' . ($comment['user_liked'] ? '#e74c3c' : 'rgba(255,255,255,0.7)') . '; text-decoration: none;">❤️ ' . $comment['like_count'] . '</a>' : '<span style="color: rgba(255,255,255,0.7);">❤️ ' . $comment['like_count'] . '</span>') . '
-                        ' . ($user ? '<a href="#" onclick="toggleReplyForm(' . $comment['id'] . ')" style="color: rgba(255,255,255,0.7); text-decoration: none;">💬 Trả lời</a>' : '') . '
-                        ' . ($can_pin ? '<a href="?toggle_pin=' . $comment['id'] . '" style="color: rgba(255,255,255,0.7); text-decoration: none;">📌 ' . $pin_text . '</a>' : '') . '
+        // Generate user avatar based on username
+        $avatar_color = generateAvatarColor($comment['username']);
+        $avatar_initial = strtoupper(mb_substr($comment['username'], 0, 1));
+        
+        // Enhanced username styling with animation effects
+        $username_style = getUsernameStyle($comment['role'], $comment['realm']);
+        
+        // Chapter info display
+        $chapter_info = '';
+        if ($comment['chapter_title'] && $comment['chapter_id']) {
+            $chapter_info = '<div class="chapter-info" style="padding: 0.8rem; margin-bottom: 0.8rem; border-radius: 8px; font-size: 0.85em;">
+                                <span style="color: #3498db; font-weight: bold; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                    <span style="font-size: 1.2em;">📖</span> Chapter ' . $comment['chapter_id'] . '
+                                </span>
+                                <span style="color: rgba(255,255,255,0.9); margin-left: 0.5rem; font-style: italic;">' . sanitize($comment['chapter_title']) . '</span>
+                             </div>';
+        }
+        
+        echo '<div class="comment-container" style="margin-left: ' . $indent . 'px; border-left: ' . ($level > 0 ? '2px solid rgba(255,255,255,0.2)' : 'none') . '; padding-left: ' . ($level > 0 ? '15px' : '0') . '; margin-bottom: 1.5rem;">
+                <div style="background: rgba(255,255,255,' . ($comment['is_pinned'] ? '0.15' : '0.08') . '); padding: 1.2rem; border-radius: 15px; border: ' . ($comment['is_pinned'] ? '2px solid #f1c40f' : '1px solid rgba(255,255,255,0.15)') . '; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s ease;" class="interactive-element">
+                    ' . $chapter_info . '
+                    <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                        <div style="flex-shrink: 0;">
+                            ' . generateUserAvatar($comment['username'], $comment['realm'], $comment['realm_stage']) . '
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; flex-wrap: wrap;">
+                                <span style="' . $username_style . '">' . sanitize($comment['username']) . '</span>
+                                ' . getUserRoleTag($comment['role']) . '
+                                ' . getEnhancedRealmBadge($comment['realm'], $comment['realm_stage']) . '
+                                ' . $pin_icon . '
+                                <span style="color: rgba(255,255,255,0.6); font-size: 0.8em; margin-left: auto;">' . getTimeAgo($comment['created_at']) . '</span>
+                            </div>
+                            <div style="margin-bottom: 1rem; line-height: 1.6; color: rgba(255,255,255,0.9);">
+                                ' . nl2br(sanitize($comment['content'])) . '
+                            </div>
+                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                ' . ($user ? '<a href="?like_comment=' . $comment['id'] . '" style="color: ' . ($comment['user_liked'] ? '#e74c3c' : 'rgba(255,255,255,0.7)') . '; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.3rem;" onmouseover="this.style.color=\'#e74c3c\'; this.style.transform=\'scale(1.1)\';" onmouseout="this.style.color=\'' . ($comment['user_liked'] ? '#e74c3c' : 'rgba(255,255,255,0.7)') . '\'; this.style.transform=\'scale(1)\';"><span style="font-size: 1.1em;">❤️</span> ' . $comment['like_count'] . '</a>' : '<span style="color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 0.3rem;"><span style="font-size: 1.1em;">❤️</span> ' . $comment['like_count'] . '</span>') . '
+                                ' . ($user ? '<a href="#" onclick="toggleReplyForm(' . $comment['id'] . ')" style="color: rgba(255,255,255,0.7); text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.3rem;" onmouseover="this.style.color=\'#3498db\'; this.style.transform=\'scale(1.1)\';" onmouseout="this.style.color=\'rgba(255,255,255,0.7)\'; this.style.transform=\'scale(1)\';"><span style="font-size: 1.1em;">💬</span> Trả lời</a>' : '') . '
+                                ' . ($can_pin ? '<a href="?toggle_pin=' . $comment['id'] . '" style="color: rgba(255,255,255,0.7); text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.3rem;" onmouseover="this.style.color=\'#f1c40f\'; this.style.transform=\'scale(1.1)\';" onmouseout="this.style.color=\'rgba(255,255,255,0.7)\'; this.style.transform=\'scale(1)\';"><span style="font-size: 1.1em;">📌</span> ' . $pin_text . '</a>' : '') . '
+                            </div>
+                        </div>
                     </div>
                 </div>';
         
@@ -783,6 +906,70 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             .page-title {
                 font-size: 2rem;
             }
+        }
+        
+        /* Enhanced Comment Animations */
+        @keyframes glow {
+            0% { box-shadow: 0 0 15px rgba(241, 196, 15, 0.6); }
+            100% { box-shadow: 0 0 25px rgba(241, 196, 15, 0.9), 0 0 35px rgba(241, 196, 15, 0.4); }
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 20px rgba(241, 196, 15, 0.5); }
+            100% { box-shadow: 0 0 30px rgba(241, 196, 15, 0.8), 0 0 40px rgba(241, 196, 15, 0.3); }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Comment container animations */
+        .comment-container {
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        /* Enhanced gradient text for special users */
+        .gradient-text {
+            background: linear-gradient(45deg, #f1c40f, #e67e22, #e74c3c);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        /* Hover effects for interactive elements */
+        .interactive-element {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .interactive-element:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Chapter info styling */
+        .chapter-info {
+            background: rgba(52, 152, 219, 0.15);
+            border-left: 3px solid #3498db;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+        
+        .chapter-info:hover {
+            background: rgba(52, 152, 219, 0.25);
+            border-left-width: 5px;
         }
     </style>
 </head>
