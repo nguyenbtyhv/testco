@@ -303,6 +303,29 @@ if ($user && in_array($user['role'], ['admin']) && isset($_GET['toggle_pin'])) {
     exit;
 }
 
+// Handle delete comment
+if ($user && isset($_GET['delete_comment'])) {
+    $comment_id = (int)$_GET['delete_comment'];
+    
+    // Check if user owns the comment or is admin
+    $comment_check = $mysqli->query("SELECT user_id FROM comments WHERE id = $comment_id");
+    if ($comment_check && $comment_check->num_rows > 0) {
+        $comment_data = $comment_check->fetch_assoc();
+        if ($comment_data['user_id'] == $user['id'] || $user['role'] === 'admin') {
+            // Delete comment and its likes
+            $mysqli->query("DELETE FROM comment_likes WHERE comment_id = $comment_id");
+            $mysqli->query("DELETE FROM comments WHERE id = $comment_id");
+            
+            // Also delete replies to this comment
+            $mysqli->query("DELETE FROM comment_likes WHERE comment_id IN (SELECT id FROM comments WHERE parent_id = $comment_id)");
+            $mysqli->query("DELETE FROM comments WHERE parent_id = $comment_id");
+        }
+    }
+    
+    header('Location: ?page=profile');
+    exit;
+}
+
 // Create tables if not exist
 $mysqli->query("CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1318,6 +1341,112 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                             <p><strong>Ngày tham gia:</strong> ' . date('d/m/Y', strtotime($user['created_at'])) . '</p>
                         </div>
                       </div>';
+                
+                // Display commented chapters section
+                echo '<div class="admin-section" style="margin-top: 2rem;">
+                        <h3 style="margin-bottom: 1rem; color: #fff; font-size: 1.2rem;">📝 Chương Truyện Đã Bình Luận</h3>';
+                
+                // Get chapters where user has commented
+                $commented_chapters_query = "
+                    SELECT DISTINCT 
+                        c.id as comment_id,
+                        c.content,
+                        c.created_at as comment_date,
+                        ch.id as chapter_id,
+                        ch.chapter_title,
+                        co.id as comic_id,
+                        co.title as comic_title,
+                        co.thumbnail
+                    FROM comments c
+                    LEFT JOIN chapters ch ON c.chapter_id = ch.id
+                    LEFT JOIN comics co ON ch.comic_id = co.id
+                    WHERE c.user_id = {$user['id']} 
+                    AND c.chapter_id IS NOT NULL
+                    ORDER BY c.created_at DESC
+                    LIMIT 10
+                ";
+                
+                $commented_chapters = $mysqli->query($commented_chapters_query);
+                $total_comments = $commented_chapters ? $commented_chapters->num_rows : 0;
+                
+                if ($commented_chapters && $commented_chapters->num_rows > 0) {
+                    echo '<div style="margin-bottom: 1rem; padding: 0.5rem 1rem; background: rgba(52, 152, 219, 0.2); border-radius: 20px; display: inline-block; color: #3498db; font-size: 0.85rem;">
+                            📊 Đã bình luận tại ' . $total_comments . ' chương truyện
+                          </div>';
+                    while ($row = $commented_chapters->fetch_assoc()) {
+                        echo '<div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.2); position: relative;">
+                                <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                                    <div style="flex-shrink: 0;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(45deg, #4ecdc4, #44a08d); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem;">
+                                            ' . strtoupper(substr($user['username'], 0, 2)) . '
+                                        </div>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <span style="background: #3498db; color: white; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
+                                                ' . sanitize($user_progress['realm']) . '
+                                            </span>
+                                            <span style="background: #2ecc71; color: white; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">
+                                                ' . $user_progress['realm_stage'] . '
+                                            </span>
+                                            <span style="color: #3498db; font-size: 0.9rem; font-weight: bold;">
+                                                <a href="?page=comic&id=' . $row['comic_id'] . '" style="color: #3498db; text-decoration: none;">
+                                                    ' . sanitize($row['comic_title']) . '
+                                                </a> - Chapter ' . sanitize($row['chapter_title']) . '
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; gap: 0.8rem; margin-bottom: 0.5rem;">
+                                            <div style="flex: 1;">
+                                                <div style="color: rgba(255,255,255,0.9); font-size: 0.95rem; line-height: 1.4; margin-bottom: 0.5rem;">
+                                                    ' . (strlen($row['content']) > 120 ? substr(sanitize($row['content']), 0, 120) . '...' : sanitize($row['content'])) . '
+                                                </div>
+                                            </div>
+                                            <div style="flex-shrink: 0;">
+                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : 'https://via.placeholder.com/50x60/333/fff?text=No+Image') . '" 
+                                                     alt="' . sanitize($row['comic_title']) . '" 
+                                                     style="width: 50px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">
+                                                ' . getTimeAgo($row['comment_date']) . '
+                                            </span>
+                                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                                <a href="?page=chapter&id=' . $row['chapter_id'] . '" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem;">
+                                                    📖 Đọc lại
+                                                </a>
+                                                <a href="?page=chapter&id=' . $row['chapter_id'] . '#comments" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem;">
+                                                    💬 Phản hồi
+                                                </a>
+                                                <div style="position: relative;">
+                                                    <span style="color: rgba(255,255,255,0.7); font-size: 1rem; cursor: pointer;" onclick="toggleOptions(' . $row['comment_id'] . ')">
+                                                        ⋯
+                                                    </span>
+                                                    <div id="options-' . $row['comment_id'] . '" style="display: none; position: absolute; right: 0; top: 100%; background: rgba(0,0,0,0.9); border-radius: 8px; padding: 0.5rem; min-width: 120px; z-index: 10; border: 1px solid rgba(255,255,255,0.2);">
+                                                        <div style="padding: 0.3rem 0.5rem; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 0.8rem;" onclick="editComment(' . $row['comment_id'] . ')">✏️ Chỉnh sửa</div>
+                                                        <div style="padding: 0.3rem 0.5rem; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 0.8rem;" onclick="deleteComment(' . $row['comment_id'] . ')">🗑️ Xóa</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                              </div>';
+                    }
+                } else {
+                    echo '<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.2);">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">💭</div>
+                            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Chưa có bình luận nào</p>
+                            <p style="font-size: 0.9rem; line-height: 1.4;">Hãy đọc truyện và để lại bình luận để tương tác với cộng đồng!</p>
+                            <div style="margin-top: 1rem;">
+                                <a href="?" style="color: #3498db; text-decoration: none; font-size: 0.9rem;">
+                                    🏠 Về trang chủ để đọc truyện
+                                </a>
+                            </div>
+                          </div>';
+                }
+                
+                echo '</div>';
                 break;
 
             default:
@@ -1360,6 +1489,43 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 form.style.display = 'none';
             }
         }
+        
+        // Toggle options dropdown
+        function toggleOptions(commentId) {
+            const dropdown = document.getElementById('options-' + commentId);
+            const isVisible = dropdown.style.display === 'block';
+            
+            // Hide all other dropdowns
+            document.querySelectorAll('[id^="options-"]').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Toggle current dropdown
+            dropdown.style.display = isVisible ? 'none' : 'block';
+        }
+        
+        // Edit comment function
+        function editComment(commentId) {
+            alert('Tính năng chỉnh sửa bình luận sẽ được phát triển trong tương lai!');
+            toggleOptions(commentId);
+        }
+        
+        // Delete comment function
+        function deleteComment(commentId) {
+            if (confirm('Bạn có chắc chắn muốn xóa bình luận này không?')) {
+                window.location.href = '?delete_comment=' + commentId;
+            }
+            toggleOptions(commentId);
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('[onclick*="toggleOptions"]') && !event.target.closest('[id^="options-"]')) {
+                document.querySelectorAll('[id^="options-"]').forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+        });
     </script>
 </body>
 </html>
