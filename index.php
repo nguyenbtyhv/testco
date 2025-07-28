@@ -184,15 +184,24 @@ function getRealmBadge($realm, $stage) {
 
 function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0) {
     $where_clause = "WHERE parent_id " . ($parent_id ? "= $parent_id" : "IS NULL");
-    if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
-    if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
+    
+    // Nếu đang ở trang comic, hiển thị tất cả bình luận của comic và các chapter của comic đó
+    if ($comic_id && !$chapter_id) {
+        $where_clause .= " AND (c.comic_id = $comic_id OR c.chapter_id IN (SELECT id FROM chapters WHERE comic_id = $comic_id))";
+    } else {
+        // Nếu đang ở chapter cụ thể, chỉ hiển thị bình luận của chapter đó
+        if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
+        if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
+    }
     
     $comments = $mysqli->query("
         SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
+               ch.chapter_title, ch.id as chapter_id_for_tag,
                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as like_count,
                " . ($user ? "(SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = {$user['id']}) as user_liked" : "0 as user_liked") . "
         FROM comments c 
         JOIN users u ON u.id = c.user_id 
+        LEFT JOIN chapters ch ON c.chapter_id = ch.id
         $where_clause
         ORDER BY c.is_pinned DESC, c.created_at DESC
     ");
@@ -215,8 +224,25 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                         ' . getUserRoleTag($comment['role']) . '
                         ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '';
                         
-        // Display user's commented chapters info if this is a comic page
-        if ($comic_id) {
+        // Hiển thị tag chapter nếu bình luận từ chapter
+        if ($comment['chapter_title']) {
+            echo '<a href="?page=chapter&id=' . $comment['chapter_id_for_tag'] . '" style="text-decoration: none;">
+                    <span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" 
+                          onmouseover="this.style.background=\'rgba(52, 152, 219, 0.3)\'" 
+                          onmouseout="this.style.background=\'rgba(52, 152, 219, 0.2)\'"
+                          title="Bình luận từ Chapter ' . sanitize($comment['chapter_title']) . '">
+                        📖 Chapter ' . sanitize($comment['chapter_title']) . '
+                      </span>
+                  </a>';
+        } else if ($comic_id && !$chapter_id) {
+            // Chỉ hiển thị tag "Trang truyện" khi đang ở trang comic (không phải chapter)
+            echo '<span style="background: rgba(155, 89, 182, 0.2); color: #9b59b6; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;">
+                    📚 Trang truyện
+                  </span>';
+        }
+                        
+        // Display user's commented chapters info if this is a comic page and comment is not from a specific chapter
+        if ($comic_id && !$comment['chapter_title']) {
             $user_chapters_query = $mysqli->query("
                 SELECT COUNT(DISTINCT c.chapter_id) as chapter_count,
                        GROUP_CONCAT(DISTINCT ch.chapter_title ORDER BY ch.id ASC SEPARATOR ', ') as chapter_titles
@@ -330,6 +356,15 @@ if ($user && $_POST && isset($_POST['add_comment'])) {
     $comic_id = isset($_POST['comic_id']) ? (int)$_POST['comic_id'] : null;
     $chapter_id = isset($_POST['chapter_id']) ? (int)$_POST['chapter_id'] : null;
     $parent_id = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
+    
+    // Nếu bình luận ở chapter, tự động lấy comic_id từ chapter
+    if ($chapter_id && !$comic_id) {
+        $chapter_query = $mysqli->query("SELECT comic_id FROM chapters WHERE id = $chapter_id");
+        if ($chapter_query && $chapter_query->num_rows > 0) {
+            $chapter_data = $chapter_query->fetch_assoc();
+            $comic_id = $chapter_data['comic_id'];
+        }
+    }
     
     if (!empty($content) && ($comic_id || $chapter_id)) {
         $stmt = $mysqli->prepare("INSERT INTO comments (user_id, comic_id, chapter_id, parent_id, content) VALUES (?, ?, ?, ?, ?)");
@@ -1223,6 +1258,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 if ($user) {
                     echo '<form method="POST" style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
                             <input type="hidden" name="chapter_id" value="' . $chapter_id . '">
+                            <input type="hidden" name="comic_id" value="' . $chapter['comic_id'] . '">
                             <div class="form-group">
                                 <textarea name="content" class="form-input" placeholder="Viết bình luận về chương này..." rows="4" required></textarea>
                             </div>
