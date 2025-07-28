@@ -213,8 +213,62 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                         <strong>' . sanitize($comment['username']) . '</strong>
                         ' . getUserRoleTag($comment['role']) . '
-                        ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '
-                        ' . $pin_icon . '
+                        ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '';
+                        
+        // Display user's commented chapters info if this is a comic page
+        if ($comic_id) {
+            $user_chapters_query = $mysqli->query("
+                SELECT COUNT(DISTINCT c.chapter_id) as chapter_count,
+                       GROUP_CONCAT(DISTINCT ch.chapter_title ORDER BY ch.id ASC SEPARATOR ', ') as chapter_titles
+                FROM comments c 
+                JOIN chapters ch ON c.chapter_id = ch.id 
+                WHERE c.user_id = {$comment['user_id']} AND ch.comic_id = $comic_id
+            ");
+            $chapter_data = $user_chapters_query->fetch_assoc();
+            if ($chapter_data['chapter_count'] > 0) {
+                $chapter_titles = strlen($chapter_data['chapter_titles']) > 100 ? 
+                    substr($chapter_data['chapter_titles'], 0, 100) . '...' : 
+                    $chapter_data['chapter_titles'];
+                echo '<span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold; cursor: pointer; position: relative;" 
+                            onclick="toggleChapterList(' . $comment['user_id'] . '_' . $comment['id'] . ')"
+                            title="Click để xem chi tiết các chương đã bình luận">
+                        📖 ' . $chapter_data['chapter_count'] . ' chương
+                      </span>';
+                      
+                // Hidden dropdown with chapter details
+                $detailed_chapters_query = $mysqli->query("
+                    SELECT DISTINCT ch.id, ch.chapter_title, COUNT(c.id) as comment_count,
+                           MAX(c.created_at) as last_comment
+                    FROM comments c 
+                    JOIN chapters ch ON c.chapter_id = ch.id 
+                    WHERE c.user_id = {$comment['user_id']} AND ch.comic_id = $comic_id
+                    GROUP BY ch.id, ch.chapter_title
+                    ORDER BY ch.id ASC
+                ");
+                
+                echo '<div id="chapter-list-' . $comment['user_id'] . '_' . $comment['id'] . '" style="display: none; position: absolute; top: 100%; left: 0; background: rgba(0,0,0,0.95); border-radius: 8px; padding: 1rem; min-width: 300px; z-index: 1000; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                        <div style="color: #2ecc71; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                            📚 Các chương đã bình luận:
+                        </div>';
+                        
+                while ($chapter_detail = $detailed_chapters_query->fetch_assoc()) {
+                    echo '<div style="padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <a href="?page=chapter&id=' . $chapter_detail['id'] . '" style="color: #3498db; text-decoration: none; font-size: 0.8rem;">
+                                    Chapter ' . sanitize($chapter_detail['chapter_title']) . '
+                                </a>
+                            </div>
+                            <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">
+                                ' . $chapter_detail['comment_count'] . ' bình luận
+                            </div>
+                          </div>';
+                }
+                
+                echo '</div>';
+            }
+        }
+        
+        echo '        ' . $pin_icon . '
                         <span style="color: rgba(255,255,255,0.6); font-size: 0.8em;">' . getTimeAgo($comment['created_at']) . '</span>
                     </div>
                     <div style="margin-bottom: 1rem; line-height: 1.5;">
@@ -300,6 +354,54 @@ if ($user && in_array($user['role'], ['admin']) && isset($_GET['toggle_pin'])) {
     $mysqli->query("UPDATE comments SET is_pinned = $new_pin WHERE id = $comment_id");
     
     header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit;
+}
+
+// Handle delete comment
+if ($user && isset($_GET['delete_comment'])) {
+    $comment_id = (int)$_GET['delete_comment'];
+    
+    // Check if user owns the comment or is admin
+    $comment_check = $mysqli->query("SELECT user_id FROM comments WHERE id = $comment_id");
+    if ($comment_check && $comment_check->num_rows > 0) {
+        $comment_data = $comment_check->fetch_assoc();
+        if ($comment_data['user_id'] == $user['id'] || $user['role'] === 'admin') {
+            // Delete comment and its likes
+            $mysqli->query("DELETE FROM comment_likes WHERE comment_id = $comment_id");
+            $mysqli->query("DELETE FROM comments WHERE id = $comment_id");
+            
+            // Also delete replies to this comment
+            $mysqli->query("DELETE FROM comment_likes WHERE comment_id IN (SELECT id FROM comments WHERE parent_id = $comment_id)");
+            $mysqli->query("DELETE FROM comments WHERE parent_id = $comment_id");
+        }
+    }
+    
+    header('Location: ?page=profile');
+    exit;
+}
+
+// Handle remove all comments from a comic
+if ($user && isset($_GET['remove_comic_comments'])) {
+    $comic_id = (int)$_GET['remove_comic_comments'];
+    
+    // Get all chapter IDs from this comic
+    $chapters_query = $mysqli->query("SELECT id FROM chapters WHERE comic_id = $comic_id");
+    $chapter_ids = [];
+    while ($chapter = $chapters_query->fetch_assoc()) {
+        $chapter_ids[] = $chapter['id'];
+    }
+    
+    if (!empty($chapter_ids)) {
+        $chapter_ids_str = implode(',', $chapter_ids);
+        
+        // Delete user's comments and their likes from this comic
+        $mysqli->query("DELETE FROM comment_likes WHERE comment_id IN (
+            SELECT id FROM comments WHERE user_id = {$user['id']} AND chapter_id IN ($chapter_ids_str)
+        )");
+        $mysqli->query("DELETE FROM comments WHERE user_id = {$user['id']} AND chapter_id IN ($chapter_ids_str)");
+    }
+    
+    header('Location: ?page=profile');
     exit;
 }
 
@@ -1318,6 +1420,111 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                             <p><strong>Ngày tham gia:</strong> ' . date('d/m/Y', strtotime($user['created_at'])) . '</p>
                         </div>
                       </div>';
+                
+                // Display commented comics management section
+                echo '<div class="admin-section" style="margin-top: 2rem;">
+                        <h3 style="margin-bottom: 1rem; color: #fff; font-size: 1.2rem;">📚 Quản Lý Truyện Đã Bình Luận</h3>';
+                
+                // Get comics where user has commented
+                $commented_comics_query = "
+                    SELECT 
+                        co.id as comic_id,
+                        co.title as comic_title,
+                        co.thumbnail,
+                        COUNT(DISTINCT ch.id) as chapter_count,
+                        COUNT(c.id) as total_comments,
+                        MAX(c.created_at) as last_comment_date,
+                        GROUP_CONCAT(DISTINCT ch.chapter_title ORDER BY ch.id ASC SEPARATOR ', ') as chapter_titles
+                    FROM comments c
+                    LEFT JOIN chapters ch ON c.chapter_id = ch.id
+                    LEFT JOIN comics co ON ch.comic_id = co.id
+                    WHERE c.user_id = {$user['id']} 
+                    AND c.chapter_id IS NOT NULL
+                    GROUP BY co.id, co.title, co.thumbnail
+                    ORDER BY last_comment_date DESC
+                    LIMIT 10
+                ";
+                
+                $commented_comics = $mysqli->query($commented_comics_query);
+                $total_comics = $commented_comics ? $commented_comics->num_rows : 0;
+                
+                if ($commented_comics && $commented_comics->num_rows > 0) {
+                    echo '<div style="margin-bottom: 1rem; padding: 0.5rem 1rem; background: rgba(52, 152, 219, 0.2); border-radius: 20px; display: inline-block; color: #3498db; font-size: 0.85rem;">
+                            📊 Đã bình luận tại ' . $total_comics . ' truyện
+                          </div>';
+                    while ($row = $commented_comics->fetch_assoc()) {
+                        echo '<div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.2); position: relative;">
+                                <div style="display: flex; align-items: flex-start; gap: 1rem;">
+                                    <div style="flex-shrink: 0;">
+                                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(45deg, #4ecdc4, #44a08d); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem;">
+                                            ' . strtoupper(substr($user['username'], 0, 2)) . '
+                                        </div>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <span style="background: #3498db; color: white; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">
+                                                ' . sanitize($user_progress['realm']) . '
+                                            </span>
+                                            <span style="background: #2ecc71; color: white; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">
+                                                ' . $user_progress['realm_stage'] . '
+                                            </span>
+                                            <span style="color: #3498db; font-size: 0.9rem; font-weight: bold;">
+                                                <a href="?page=comic&id=' . $row['comic_id'] . '" style="color: #3498db; text-decoration: none;">
+                                                    ' . sanitize($row['comic_title']) . '
+                                                </a>
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; gap: 0.8rem; margin-bottom: 0.5rem;">
+                                            <div style="flex: 1;">
+                                                <div style="color: rgba(255,255,255,0.9); font-size: 0.9rem; line-height: 1.4; margin-bottom: 0.5rem;">
+                                                    <strong>📊 Thống kê:</strong> ' . $row['chapter_count'] . ' chương • ' . $row['total_comments'] . ' bình luận
+                                                </div>
+                                                <div style="color: rgba(255,255,255,0.7); font-size: 0.85rem; line-height: 1.3;">
+                                                    <strong>📖 Các chương:</strong> ' . (strlen($row['chapter_titles']) > 100 ? substr($row['chapter_titles'], 0, 100) . '...' : $row['chapter_titles']) . '
+                                                </div>
+                                            </div>
+                                            <div style="flex-shrink: 0;">
+                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : 'https://via.placeholder.com/50x60/333/fff?text=No+Image') . '" 
+                                                     alt="' . sanitize($row['comic_title']) . '" 
+                                                     style="width: 50px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: rgba(255,255,255,0.6); font-size: 0.8rem;">
+                                                Bình luận cuối: ' . getTimeAgo($row['last_comment_date']) . '
+                                            </span>
+                                            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                                                <a href="?page=comic&id=' . $row['comic_id'] . '" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem;">
+                                                    📚 Xem truyện
+                                                </a>
+                                                <a href="?page=comic&id=' . $row['comic_id'] . '#comments" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem;">
+                                                    💬 Bình luận
+                                                </a>
+                                                <span style="background: rgba(231, 76, 60, 0.2); color: #e74c3c; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer;" 
+                                                      onclick="removeComicFromList(' . $row['comic_id'] . ')" 
+                                                      title="Xóa khỏi danh sách">
+                                                    🗑️ Xóa
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                              </div>';
+                    }
+                } else {
+                    echo '<div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.2);">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">💭</div>
+                            <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Chưa có bình luận nào</p>
+                            <p style="font-size: 0.9rem; line-height: 1.4;">Hãy đọc truyện và để lại bình luận để tương tác với cộng đồng!</p>
+                            <div style="margin-top: 1rem;">
+                                <a href="?" style="color: #3498db; text-decoration: none; font-size: 0.9rem;">
+                                    🏠 Về trang chủ để đọc truyện
+                                </a>
+                            </div>
+                          </div>';
+                }
+                
+                echo '</div>';
                 break;
 
             default:
@@ -1360,6 +1567,73 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 form.style.display = 'none';
             }
         }
+        
+        // Toggle options dropdown
+        function toggleOptions(commentId) {
+            const dropdown = document.getElementById('options-' + commentId);
+            const isVisible = dropdown.style.display === 'block';
+            
+            // Hide all other dropdowns
+            document.querySelectorAll('[id^="options-"]').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Toggle current dropdown
+            dropdown.style.display = isVisible ? 'none' : 'block';
+        }
+        
+        // Edit comment function
+        function editComment(commentId) {
+            alert('Tính năng chỉnh sửa bình luận sẽ được phát triển trong tương lai!');
+            toggleOptions(commentId);
+        }
+        
+        // Delete comment function
+        function deleteComment(commentId) {
+            if (confirm('Bạn có chắc chắn muốn xóa bình luận này không?')) {
+                window.location.href = '?delete_comment=' + commentId;
+            }
+            toggleOptions(commentId);
+        }
+        
+        // Remove comic from commented list
+        function removeComicFromList(comicId) {
+            if (confirm('Bạn có chắc chắn muốn xóa tất cả bình luận của truyện này khỏi danh sách không?')) {
+                window.location.href = '?remove_comic_comments=' + comicId;
+            }
+        }
+        
+        // Toggle chapter list dropdown
+        function toggleChapterList(commentId) {
+            const dropdown = document.getElementById('chapter-list-' + commentId);
+            const isVisible = dropdown.style.display === 'block';
+            
+            // Hide all other chapter lists
+            document.querySelectorAll('[id^="chapter-list-"]').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Toggle current dropdown
+            dropdown.style.display = isVisible ? 'none' : 'block';
+            
+            // Prevent event bubbling
+            event.stopPropagation();
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('[onclick*="toggleOptions"]') && !event.target.closest('[id^="options-"]')) {
+                document.querySelectorAll('[id^="options-"]').forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            
+            if (!event.target.closest('[onclick*="toggleChapterList"]') && !event.target.closest('[id^="chapter-list-"]')) {
+                document.querySelectorAll('[id^="chapter-list-"]').forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+        });
     </script>
 </body>
 </html>
