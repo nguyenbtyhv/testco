@@ -189,10 +189,12 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
     
     $comments = $mysqli->query("
         SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
+               ch.chapter_title,
                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as like_count,
                " . ($user ? "(SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = {$user['id']}) as user_liked" : "0 as user_liked") . "
         FROM comments c 
         JOIN users u ON u.id = c.user_id 
+        LEFT JOIN chapters ch ON c.chapter_id = ch.id
         $where_clause
         ORDER BY c.is_pinned DESC, c.created_at DESC
     ");
@@ -215,8 +217,15 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                         ' . getUserRoleTag($comment['role']) . '
                         ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '';
                         
-        // Display user's commented chapters info if this is a comic page
-        if ($comic_id) {
+        // Display chapter tag if comment is from a specific chapter
+        if ($comment['chapter_id'] && $comment['chapter_title']) {
+            echo '<span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;">
+                    📖 Chapter ' . sanitize($comment['chapter_title']) . '
+                  </span>';
+        }
+                        
+        // Display user's commented chapters info if this is a comic page (only show total count, not individual chapter tags)
+        if ($comic_id && !$comment['chapter_id']) {
             $user_chapters_query = $mysqli->query("
                 SELECT COUNT(DISTINCT c.chapter_id) as chapter_count,
                        GROUP_CONCAT(DISTINCT ch.chapter_title ORDER BY ch.id ASC SEPARATOR ', ') as chapter_titles
