@@ -184,15 +184,23 @@ function getRealmBadge($realm, $stage) {
 
 function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0) {
     $where_clause = "WHERE parent_id " . ($parent_id ? "= $parent_id" : "IS NULL");
-    if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
-    if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
+    
+    // If we're on a comic page (comic_id exists but chapter_id is null), show all comments for this comic
+    if ($comic_id && $chapter_id === null) {
+        $where_clause .= " AND comic_id = $comic_id";
+    }
+    // If we're on a chapter page, show only comments for this specific chapter
+    elseif ($chapter_id) {
+        $where_clause .= " AND chapter_id = $chapter_id";
+    }
     
     $comments = $mysqli->query("
-        SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
+        SELECT c.*, u.username, u.role, u.realm, u.realm_stage, ch.chapter_title,
                (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as like_count,
                " . ($user ? "(SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = {$user['id']}) as user_liked" : "0 as user_liked") . "
         FROM comments c 
         JOIN users u ON u.id = c.user_id 
+        LEFT JOIN chapters ch ON c.chapter_id = ch.id
         $where_clause
         ORDER BY c.is_pinned DESC, c.created_at DESC
     ");
@@ -214,6 +222,13 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                         <strong>' . sanitize($comment['username']) . '</strong>
                         ' . getUserRoleTag($comment['role']) . '
                         ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '';
+                        
+        // Display chapter tag if comment is from a specific chapter and we're on comic page
+        if ($comic_id && $chapter_id === null && $comment['chapter_title']) {
+            echo '<span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;">
+                    📖 Chapter ' . sanitize($comment['chapter_title']) . '
+                  </span>';
+        }
                         
         // Display user's commented chapters info if this is a comic page
         if ($comic_id) {
@@ -330,6 +345,14 @@ if ($user && $_POST && isset($_POST['add_comment'])) {
     $comic_id = isset($_POST['comic_id']) ? (int)$_POST['comic_id'] : null;
     $chapter_id = isset($_POST['chapter_id']) ? (int)$_POST['chapter_id'] : null;
     $parent_id = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
+    
+    // If we have chapter_id but no comic_id, get comic_id from chapter
+    if ($chapter_id && !$comic_id) {
+        $chapter_info = $mysqli->query("SELECT comic_id FROM chapters WHERE id = $chapter_id")->fetch_assoc();
+        if ($chapter_info) {
+            $comic_id = (int)$chapter_info['comic_id'];
+        }
+    }
     
     if (!empty($content) && ($comic_id || $chapter_id)) {
         $stmt = $mysqli->prepare("INSERT INTO comments (user_id, comic_id, chapter_id, parent_id, content) VALUES (?, ?, ?, ?, ?)");
@@ -1222,6 +1245,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 // Comment form
                 if ($user) {
                     echo '<form method="POST" style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                            <input type="hidden" name="comic_id" value="' . $chapter['comic_id'] . '">
                             <input type="hidden" name="chapter_id" value="' . $chapter_id . '">
                             <div class="form-group">
                                 <textarea name="content" class="form-input" placeholder="Viết bình luận về chương này..." rows="4" required></textarea>
@@ -1237,7 +1261,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 }
                 
                 // Display comments
-                displayComments($mysqli, $user, null, $chapter_id);
+                displayComments($mysqli, $user, $chapter['comic_id'], $chapter_id);
                 
                 echo '</div>';
                 break;
