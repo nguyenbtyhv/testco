@@ -309,6 +309,219 @@ function addQi($mysqli, $user_id, $amount = 1) {
     }
 }
 
+// Ranking calculation functions
+function calculateComicRankings($mysqli, $rank_type = 'daily') {
+    $date_condition = '';
+    $today = date('Y-m-d');
+    
+    switch ($rank_type) {
+        case 'daily':
+            $date_condition = "AND DATE(created_at) = '$today'";
+            break;
+        case 'weekly':
+            $date_condition = "AND created_at >= DATE_SUB('$today', INTERVAL 7 DAY)";
+            break;
+        case 'monthly':
+            $date_condition = "AND created_at >= DATE_SUB('$today', INTERVAL 30 DAY)";
+            break;
+    }
+    
+    // Calculate comic scores based on views, favorites, and comments
+    $query = "
+        SELECT 
+            c.id as comic_id,
+            c.title,
+            c.thumbnail,
+            COALESCE(SUM(ch.views), 0) as total_views,
+            COALESCE(fav_count.favorites, 0) as favorites_count,
+            COALESCE(comment_count.comments, 0) as comments_count,
+            (
+                COALESCE(SUM(ch.views), 0) * 1.0 + 
+                COALESCE(fav_count.favorites, 0) * 5.0 + 
+                COALESCE(comment_count.comments, 0) * 3.0
+            ) as score
+        FROM comics c
+        LEFT JOIN chapters ch ON c.id = ch.comic_id
+        LEFT JOIN (
+            SELECT comic_id, COUNT(*) as favorites 
+            FROM user_favorites 
+            WHERE 1=1 $date_condition 
+            GROUP BY comic_id
+        ) fav_count ON c.id = fav_count.comic_id
+        LEFT JOIN (
+            SELECT 
+                COALESCE(ch.comic_id, c2.id) as comic_id, 
+                COUNT(cm.id) as comments 
+            FROM comments cm
+            LEFT JOIN chapters ch ON cm.chapter_id = ch.id
+            LEFT JOIN comics c2 ON cm.comic_id = c2.id
+            WHERE 1=1 $date_condition
+            GROUP BY COALESCE(ch.comic_id, c2.id)
+        ) comment_count ON c.id = comment_count.comic_id
+        GROUP BY c.id, c.title, c.thumbnail, fav_count.favorites, comment_count.comments
+        HAVING score > 0
+        ORDER BY score DESC
+        LIMIT 100
+    ";
+    
+    $result = $mysqli->query($query);
+    $rankings = [];
+    $position = 1;
+    
+    while ($result && $row = $result->fetch_assoc()) {
+        $rankings[] = [
+            'comic_id' => $row['comic_id'],
+            'position' => $position,
+            'views' => $row['total_views'],
+            'favorites' => $row['favorites_count'],
+            'comments' => $row['comments_count'],
+            'score' => $row['score']
+        ];
+        $position++;
+    }
+    
+    // Save rankings to database
+    foreach ($rankings as $ranking) {
+        $mysqli->query("
+            INSERT INTO comic_rankings 
+            (comic_id, rank_type, rank_position, views_count, favorites_count, comments_count, score, ranking_date)
+            VALUES 
+            ({$ranking['comic_id']}, '$rank_type', {$ranking['position']}, {$ranking['views']}, {$ranking['favorites']}, {$ranking['comments']}, {$ranking['score']}, '$today')
+            ON DUPLICATE KEY UPDATE
+            rank_position = {$ranking['position']},
+            views_count = {$ranking['views']},
+            favorites_count = {$ranking['favorites']},
+            comments_count = {$ranking['comments']},
+            score = {$ranking['score']}
+        ");
+    }
+    
+    return $rankings;
+}
+
+function calculateUserRankings($mysqli) {
+    $today = date('Y-m-d');
+    
+    // Calculate Cao Thủ ranking (based on realm and total qi)
+    $cao_thu_query = "
+        SELECT 
+            u.id as user_id,
+            u.username,
+            u.realm,
+            u.realm_stage,
+            urp.total_qi_earned,
+            (
+                CASE u.realm
+                    WHEN 'Luyện Khí' THEN 1
+                    WHEN 'Trúc Cơ' THEN 2
+                    WHEN 'Kết Đan' THEN 3
+                    WHEN 'Nguyên Anh' THEN 4
+                    WHEN 'Hóa Thần' THEN 5
+                    WHEN 'Luyện Hư' THEN 6
+                    WHEN 'Hợp Thể' THEN 7
+                    WHEN 'Đại Thừa' THEN 8
+                    WHEN 'Độ Kiếp' THEN 9
+                    ELSE 0
+                END * 1000000 + u.realm_stage * 10000 + urp.total_qi_earned
+            ) as score
+        FROM users u
+        LEFT JOIN user_realm_progress urp ON u.id = urp.user_id
+        WHERE u.role != 'admin'
+        ORDER BY score DESC
+        LIMIT 50
+    ";
+    
+    $result = $mysqli->query($cao_thu_query);
+    $position = 1;
+    while ($result && $row = $result->fetch_assoc()) {
+        $mysqli->query("
+            INSERT INTO user_rankings 
+            (user_id, rank_type, rank_position, score_value, ranking_date)
+            VALUES 
+            ({$row['user_id']}, 'cao_thu', $position, {$row['score']}, '$today')
+            ON DUPLICATE KEY UPDATE
+            rank_position = $position,
+            score_value = {$row['score']}
+        ");
+        $position++;
+    }
+    
+    // Calculate Tỷ Phú ranking (based on coins)
+    $ty_phu_query = "
+        SELECT 
+            u.id as user_id,
+            u.username,
+            u.coins as score
+        FROM users u
+        WHERE u.role != 'admin' AND u.coins > 0
+        ORDER BY u.coins DESC
+        LIMIT 50
+    ";
+    
+    $result = $mysqli->query($ty_phu_query);
+    $position = 1;
+    while ($result && $row = $result->fetch_assoc()) {
+        $mysqli->query("
+            INSERT INTO user_rankings 
+            (user_id, rank_type, rank_position, score_value, ranking_date)
+            VALUES 
+            ({$row['user_id']}, 'ty_phu', $position, {$row['score']}, '$today')
+            ON DUPLICATE KEY UPDATE
+            rank_position = $position,
+            score_value = {$row['score']}
+        ");
+        $position++;
+    }
+}
+
+function getRankingData($mysqli, $rank_type = 'daily', $limit = 10) {
+    $today = date('Y-m-d');
+    
+    $query = "
+        SELECT 
+            cr.rank_position,
+            cr.score,
+            cr.views_count,
+            cr.favorites_count,
+            cr.comments_count,
+            c.id,
+            c.title,
+            c.thumbnail,
+            c.author
+        FROM comic_rankings cr
+        JOIN comics c ON cr.comic_id = c.id
+        WHERE cr.rank_type = '$rank_type' AND cr.ranking_date = '$today'
+        ORDER BY cr.rank_position ASC
+        LIMIT $limit
+    ";
+    
+    return $mysqli->query($query);
+}
+
+function getUserRankingData($mysqli, $rank_type = 'cao_thu', $limit = 10) {
+    $today = date('Y-m-d');
+    
+    $query = "
+        SELECT 
+            ur.rank_position,
+            ur.score_value,
+            u.id,
+            u.username,
+            u.realm,
+            u.realm_stage,
+            u.coins,
+            urp.total_qi_earned
+        FROM user_rankings ur
+        JOIN users u ON ur.user_id = u.id
+        LEFT JOIN user_realm_progress urp ON u.id = urp.user_id
+        WHERE ur.rank_type = '$rank_type' AND ur.ranking_date = '$today'
+        ORDER BY ur.rank_position ASC
+        LIMIT $limit
+    ";
+    
+    return $mysqli->query($query);
+}
+
 function getUserRoleTag($role) {
     switch($role) {
         case 'admin': return '<span style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">👑 ADMIN</span>';
@@ -730,6 +943,36 @@ if (!$admin_check || $admin_check->num_rows == 0) {
                    VALUES ('admin', 'admin@manga.com', '$admin_password', 'admin', 10000, 'Độ Kiếp', 1)");
 }
 
+// Create ranking tables
+$mysqli->query("CREATE TABLE IF NOT EXISTS comic_rankings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    comic_id INT NOT NULL,
+    rank_type ENUM('daily', 'weekly', 'monthly') NOT NULL,
+    rank_position INT NOT NULL,
+    views_count INT DEFAULT 0,
+    favorites_count INT DEFAULT 0,
+    comments_count INT DEFAULT 0,
+    score DECIMAL(10,2) DEFAULT 0.00,
+    ranking_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_ranking (comic_id, rank_type, ranking_date),
+    INDEX idx_rank_type_date (rank_type, ranking_date),
+    INDEX idx_rank_position (rank_type, ranking_date, rank_position)
+)");
+
+$mysqli->query("CREATE TABLE IF NOT EXISTS user_rankings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    rank_type ENUM('cao_thu', 'ty_phu') NOT NULL,
+    rank_position INT NOT NULL,
+    score_value BIGINT DEFAULT 0,
+    ranking_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_ranking (user_id, rank_type, ranking_date),
+    INDEX idx_user_rank_type_date (rank_type, ranking_date),
+    INDEX idx_user_rank_position (rank_type, ranking_date, rank_position)
+)");
+
 // Add database indexes for performance optimization
 $mysqli->query("CREATE INDEX IF NOT EXISTS idx_comics_status ON comics(status)");
 $mysqli->query("CREATE INDEX IF NOT EXISTS idx_comics_created_at ON comics(created_at)");
@@ -767,37 +1010,39 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #6c63ff 0%, #9c88ff 50%, #c3acd0 100%);
+            color: #333;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         .header {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem 0;
+            border-bottom: 1px solid rgba(108, 99, 255, 0.1);
+            padding: 0.75rem 0;
             position: sticky;
             top: 0;
             z-index: 1000;
+            box-shadow: 0 2px 20px rgba(108, 99, 255, 0.1);
         }
         
         .navbar {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 2rem;
+            padding: 0 1rem;
         }
         
         .logo {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: bold;
-            color: #fff;
+            color: #6c63ff;
             text-decoration: none;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -806,120 +1051,120 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         .nav-menu {
             display: flex;
             list-style: none;
-            gap: 2rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
         
         .nav-link {
-            color: #fff;
+            color: #6c63ff;
             text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
+            padding: 0.5rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
             transition: all 0.3s ease;
+            white-space: nowrap;
         }
         
         .nav-link:hover, .nav-link.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+            transform: translateY(-1px);
         }
         
         .user-area {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
+            font-size: 0.8rem;
         }
         
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 25px;
+            border-radius: 20px;
             font-weight: 600;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
             transition: all 0.3s ease;
+            font-size: 0.8rem;
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
         }
         
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
         }
         
         .btn-outline {
             background: transparent;
-            color: #fff;
-            border: 2px solid #fff;
+            color: #6c63ff;
+            border: 2px solid #6c63ff;
         }
         
         .btn-outline:hover {
-            background: #fff;
-            color: #1e3c72;
+            background: #6c63ff;
+            color: white;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 1rem;
         }
         
         .page-title {
-            font-size: 2.5rem;
+            font-size: 1.8rem;
             text-align: center;
-            margin-bottom: 2rem;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            margin-bottom: 1.5rem;
+            color: white;
+            font-weight: bold;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
         
         .section-title {
-            font-size: 1.5rem;
-            margin-bottom: 1.5rem;
-            color: #fff;
-            position: relative;
-            padding-left: 1rem;
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            color: white;
+            font-weight: bold;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(45deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+            border-radius: 15px;
+            border-left: 4px solid #6c63ff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
         
-        .section-title::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border-radius: 2px;
-        }
-        
+        /* Mobile-first responsive grid */
         .comic-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
         }
         
         .comic-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            background: white;
             border-radius: 15px;
             overflow: hidden;
             transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.15);
+            position: relative;
         }
         
         .comic-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(108, 99, 255, 0.25);
         }
         
         .comic-thumbnail {
             width: 100%;
-            height: 250px;
+            height: 180px;
             position: relative;
             overflow: hidden;
         }
@@ -932,19 +1177,19 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         .comic-card:hover .comic-thumbnail img {
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
         
         .comic-info {
-            padding: 1rem;
+            padding: 0.75rem;
         }
         
         .comic-title {
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: #fff;
-            line-height: 1.4;
+            color: #333;
+            line-height: 1.3;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
@@ -955,18 +1200,145 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.75rem;
+            color: #666;
+        }
+        
+        /* Ranking specific styles */
+        .ranking-tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 25px;
+            padding: 0.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.1);
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            border-radius: 20px;
+            color: #6c63ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .tab-btn.active {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+        }
+        
+        .ranking-list {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.1);
+        }
+        
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s ease;
+        }
+        
+        .ranking-item:hover {
+            background: linear-gradient(90deg, rgba(108, 99, 255, 0.05), rgba(156, 136, 255, 0.05));
+        }
+        
+        .ranking-item:last-child {
+            border-bottom: none;
+        }
+        
+        .rank-number {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .rank-number.top-1 {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+        
+        .rank-number.top-2 {
+            background: linear-gradient(45deg, #C0C0C0, #A8A8A8);
+            color: white;
+            box-shadow: 0 4px 15px rgba(192, 192, 192, 0.4);
+        }
+        
+        .rank-number.top-3 {
+            background: linear-gradient(45deg, #CD7F32, #B8860B);
+            color: white;
+            box-shadow: 0 4px 15px rgba(205, 127, 50, 0.4);
+        }
+        
+        .rank-number.other {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+        }
+        
+        .ranking-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .ranking-thumbnail {
+            width: 3rem;
+            height: 3.5rem;
+            border-radius: 8px;
+            object-fit: cover;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .ranking-info {
+            flex: 1;
+        }
+        
+        .ranking-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.3;
+        }
+        
+        .ranking-stats {
+            font-size: 0.75rem;
+            color: #666;
+            display: flex;
+            gap: 0.75rem;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
         }
         
         .form-container {
             max-width: 400px;
             margin: 2rem auto;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            background: white;
             padding: 2rem;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.15);
         }
         
         .form-group {
@@ -975,119 +1347,52 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         
         .form-input {
             width: 100%;
-            padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            color: #fff;
+            padding: 0.75rem 1rem;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            color: #333;
             font-size: 1rem;
+            transition: all 0.3s ease;
         }
         
         .form-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
+            color: #adb5bd;
         }
         
         .form-input:focus {
             outline: none;
-            border-color: #4ecdc4;
-            box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+            border-color: #6c63ff;
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
         }
         
         .notification {
             padding: 1rem;
-            border-radius: 10px;
+            border-radius: 15px;
             margin-bottom: 1rem;
-            border-left: 4px solid;
+            border: none;
         }
         
         .notification.success {
-            background: rgba(46, 204, 113, 0.2);
-            border-color: #2ecc71;
-            color: #2ecc71;
+            background: linear-gradient(45deg, #51cf66, #40c057);
+            color: white;
         }
         
         .notification.error {
-            background: rgba(231, 76, 60, 0.2);
-            border-color: #e74c3c;
-            color: #e74c3c;
+            background: linear-gradient(45deg, #ff6b6b, #fa5252);
+            color: white;
         }
         
         .notification.warning {
-            background: rgba(241, 196, 15, 0.2);
-            border-color: #f1c40f;
-            color: #f1c40f;
-        }
-        
-        /* Performance optimizations */
-        img {
-            transition: opacity 0.3s ease;
-        }
-        
-        img[data-src] {
-            opacity: 0.3;
-            filter: blur(2px);
-        }
-        
-        img.loaded {
-            opacity: 1;
-            filter: none;
-        }
-        
-        .chapter-navigation {
-            position: sticky;
-            top: 80px;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-        }
-        
-        .chapter-content img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            margin-bottom: 1rem;
-            transition: transform 0.3s ease;
-        }
-        
-        .chapter-content img:hover {
-            transform: scale(1.02);
-        }
-        
-        /* Smooth animations */
-        .chapter-item {
-            transition: all 0.3s ease;
-        }
-        
-        .chapter-item:hover {
-            background: rgba(255,255,255,0.15) !important;
-            transform: translateX(5px);
-        }
-        
-        /* Keyboard shortcuts help */
-        .shortcuts-help {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
+            background: linear-gradient(45deg, #ffd43b, #fab005);
             color: white;
-            padding: 1rem;
-            border-radius: 10px;
-            font-size: 0.8rem;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            z-index: 1000;
-        }
-        
-        .shortcuts-help.show {
-            opacity: 1;
         }
         
         .chapter-list {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: white;
+            border-radius: 20px;
             overflow: hidden;
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.1);
         }
         
         .chapter-item {
@@ -1095,77 +1400,172 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             justify-content: space-between;
             align-items: center;
             padding: 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid #f0f0f0;
             transition: background 0.3s ease;
         }
         
         .chapter-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: linear-gradient(90deg, rgba(108, 99, 255, 0.05), rgba(156, 136, 255, 0.05));
         }
         
         .chapter-link {
-            color: #fff;
+            color: #333;
             text-decoration: none;
             font-weight: 500;
             flex: 1;
         }
         
         .chapter-link:hover {
-            color: #4ecdc4;
+            color: #6c63ff;
         }
         
         .admin-section {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
+            background: white;
+            border-radius: 20px;
             padding: 2rem;
             margin-bottom: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.1);
         }
         
         .admin-nav {
             display: flex;
             gap: 1rem;
             margin-bottom: 2rem;
+            flex-wrap: wrap;
         }
         
-        .tab-btn {
-            padding: 0.75rem 1.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: 10px;
-            color: #fff;
-            cursor: pointer;
+        .user-ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.1);
             transition: all 0.3s ease;
         }
         
-        .tab-btn.active {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+        .user-ranking-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.15);
         }
         
-        @media (max-width: 768px) {
-            .navbar {
-                flex-direction: column;
-                gap: 1rem;
-                padding: 1rem;
+        .user-avatar {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .username {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        
+        .user-stats {
+            font-size: 0.8rem;
+            color: #666;
+            display: flex;
+            gap: 1rem;
+        }
+        
+        /* Responsive design */
+        @media (min-width: 768px) {
+            .comic-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 1.5rem;
+            }
+            
+            .container {
+                padding: 2rem;
+            }
+            
+            .comic-thumbnail {
+                height: 220px;
             }
             
             .nav-menu {
                 gap: 1rem;
             }
             
-            .container {
-                padding: 1rem;
+            .nav-link {
+                font-size: 0.9rem;
+                padding: 0.5rem 1rem;
             }
-            
+        }
+        
+        @media (min-width: 1024px) {
             .comic-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 2rem;
             }
             
-            .page-title {
-                font-size: 2rem;
+            .comic-thumbnail {
+                height: 250px;
             }
+            
+            .navbar {
+                padding: 0 2rem;
+            }
+            
+            .nav-link {
+                font-size: 1rem;
+                padding: 0.75rem 1.25rem;
+            }
+        }
+        
+        /* Animation keyframes */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .comic-card {
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .ranking-item {
+            animation: fadeInUp 0.3s ease-out;
+        }
+        
+        /* Loading states */
+        .loading {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
         }
     </style>
 </head>
@@ -1175,6 +1575,8 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             <a href="?page=home" class="logo">🌟 MangaHub</a>
             <ul class="nav-menu">
                 <li><a href="?page=home" class="nav-link <?php echo $page == 'home' ? 'active' : ''; ?>">Trang chủ</a></li>
+                <li><a href="?page=rankings" class="nav-link <?php echo $page == 'rankings' ? 'active' : ''; ?>">🏆 Bảng xếp hạng</a></li>
+                <li><a href="?page=top_users" class="nav-link <?php echo $page == 'top_users' ? 'active' : ''; ?>">👑 Top cao thủ</a></li>
                 <li><a href="?page=favorites" class="nav-link <?php echo $page == 'favorites' ? 'active' : ''; ?>">Theo dõi</a></li>
                 <li><a href="?page=history" class="nav-link <?php echo $page == 'history' ? 'active' : ''; ?>">Lịch sử</a></li>
                 <?php if ($user): ?>
@@ -1213,7 +1615,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 $comics = $mysqli->query("SELECT * FROM comics ORDER BY updated_at DESC LIMIT 20");
                 if ($comics && $comics->num_rows > 0) {
                     while ($comic = $comics->fetch_assoc()) {
-                        $thumbnail = $comic['thumbnail'] ?: 'https://via.placeholder.com/200x250?text=No+Image';
+                        $thumbnail = $comic['thumbnail'] ?: '/assets/images/no-image.svg';
                         echo '<div class="comic-card">
                                 <a href="?page=comic&id=' . $comic['id'] . '">
                                     <div class="comic-thumbnail">
@@ -1342,7 +1744,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 
                 echo '<h1 class="page-title">' . sanitize($comic['title']) . '</h1>';
                 echo '<div style="display: flex; gap: 2rem; margin-bottom: 2rem;">
-                        <img src="' . sanitize($comic['thumbnail'] ?: 'https://via.placeholder.com/300x400') . '" 
+                                                    <img src="' . sanitize($comic['thumbnail'] ?: '/assets/images/no-image.svg') . '" 
                              style="width: 300px; height: 400px; object-fit: cover; border-radius: 15px;">
                         <div>
                             <p><strong>Tác giả:</strong> ' . sanitize($comic['author'] ?: 'Chưa rõ') . '</p>
@@ -1716,7 +2118,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                     if ($comics && $comics->num_rows > 0) {
                         while ($comic = $comics->fetch_assoc()) {
                             echo '<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 10px;">
-                                    <img src="' . sanitize($comic['thumbnail'] ?: 'https://via.placeholder.com/60x80') . '" style="width: 60px; height: 80px; object-fit: cover; border-radius: 5px;">
+                                    <img src="' . sanitize($comic['thumbnail'] ?: '/assets/images/no-image.svg') . '" style="width: 60px; height: 80px; object-fit: cover; border-radius: 5px;">
                                     <div style="flex: 1;">
                                         <h4>' . sanitize($comic['title']) . '</h4>
                                         <p style="color: rgba(255,255,255,0.7);">' . sanitize($comic['author'] ?: 'Chưa rõ tác giả') . '</p>
@@ -1910,7 +2312,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                                                 </div>
                                             </div>
                                             <div style="flex-shrink: 0;">
-                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : 'https://via.placeholder.com/50x60/333/fff?text=No+Image') . '" 
+                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : '/assets/images/no-image.svg') . '" 
                                                      alt="' . sanitize($row['comic_title']) . '" 
                                                      style="width: 50px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">
                                             </div>
@@ -2181,6 +2583,133 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 }
                 
                 echo '</div>';
+                break;
+                
+            case 'rankings':
+                // Update rankings daily
+                calculateComicRankings($mysqli, 'daily');
+                calculateComicRankings($mysqli, 'weekly');
+                calculateComicRankings($mysqli, 'monthly');
+                
+                $rank_type = $_GET['type'] ?? 'daily';
+                if (!in_array($rank_type, ['daily', 'weekly', 'monthly'])) {
+                    $rank_type = 'daily';
+                }
+                
+                echo '<h1 class="page-title">🏆 Bảng Xếp Hạng Truyện</h1>';
+                
+                echo '<div class="ranking-tabs">
+                        <button class="tab-btn ' . ($rank_type == 'daily' ? 'active' : '') . '" onclick="location.href=\'?page=rankings&type=daily\'">📅 Ngày</button>
+                        <button class="tab-btn ' . ($rank_type == 'weekly' ? 'active' : '') . '" onclick="location.href=\'?page=rankings&type=weekly\'">📅 Tuần</button>
+                        <button class="tab-btn ' . ($rank_type == 'monthly' ? 'active' : '') . '" onclick="location.href=\'?page=rankings&type=monthly\'">📅 Tháng</button>
+                      </div>';
+                
+                $rankings = getRankingData($mysqli, $rank_type, 20);
+                
+                if ($rankings && $rankings->num_rows > 0) {
+                    echo '<div class="ranking-list">';
+                    while ($ranking = $rankings->fetch_assoc()) {
+                        $rank_class = '';
+                        if ($ranking['rank_position'] == 1) $rank_class = 'top-1';
+                        elseif ($ranking['rank_position'] == 2) $rank_class = 'top-2';
+                        elseif ($ranking['rank_position'] == 3) $rank_class = 'top-3';
+                        else $rank_class = 'other';
+                        
+                        $thumbnail = $ranking['thumbnail'] ?: '/assets/images/no-image.svg';
+                        
+                        echo '<div class="ranking-item">
+                                <div class="rank-number ' . $rank_class . '">' . $ranking['rank_position'] . '</div>
+                                <div class="ranking-content">
+                                    <img src="' . sanitize($thumbnail) . '" class="ranking-thumbnail" alt="' . sanitize($ranking['title']) . '">
+                                    <div class="ranking-info">
+                                        <div class="ranking-title">
+                                            <a href="?page=comic&id=' . $ranking['id'] . '" style="color: inherit; text-decoration: none;">
+                                                ' . sanitize($ranking['title']) . '
+                                            </a>
+                                        </div>
+                                        <div class="ranking-stats">
+                                            <div class="stat-item">
+                                                <span>👁️</span>
+                                                <span>' . number_format($ranking['views_count']) . '</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span>❤️</span>
+                                                <span>' . number_format($ranking['favorites_count']) . '</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span>💬</span>
+                                                <span>' . number_format($ranking['comments_count']) . '</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                              </div>';
+                    }
+                    echo '</div>';
+                } else {
+                    echo '<div class="notification warning">Chưa có dữ liệu xếp hạng cho thời gian này.</div>';
+                }
+                break;
+                
+            case 'top_users':
+                // Update user rankings daily
+                calculateUserRankings($mysqli);
+                
+                $user_type = $_GET['type'] ?? 'cao_thu';
+                if (!in_array($user_type, ['cao_thu', 'ty_phu'])) {
+                    $user_type = 'cao_thu';
+                }
+                
+                echo '<h1 class="page-title">👑 Top Cao Thủ</h1>';
+                
+                echo '<div class="ranking-tabs">
+                        <button class="tab-btn ' . ($user_type == 'cao_thu' ? 'active' : '') . '" onclick="location.href=\'?page=top_users&type=cao_thu\'">⚔️ Cao Thủ</button>
+                        <button class="tab-btn ' . ($user_type == 'ty_phu' ? 'active' : '') . '" onclick="location.href=\'?page=top_users&type=ty_phu\'">💰 Tỷ Phú</button>
+                      </div>';
+                
+                $user_rankings = getUserRankingData($mysqli, $user_type, 20);
+                
+                if ($user_rankings && $user_rankings->num_rows > 0) {
+                    echo '<div style="display: flex; flex-direction: column; gap: 0.5rem;">';
+                    while ($user_rank = $user_rankings->fetch_assoc()) {
+                        $rank_class = '';
+                        if ($user_rank['rank_position'] == 1) $rank_class = 'top-1';
+                        elseif ($user_rank['rank_position'] == 2) $rank_class = 'top-2';
+                        elseif ($user_rank['rank_position'] == 3) $rank_class = 'top-3';
+                        else $rank_class = 'other';
+                        
+                        $avatar_text = strtoupper(substr($user_rank['username'], 0, 2));
+                        
+                        echo '<div class="user-ranking-item">
+                                <div class="rank-number ' . $rank_class . '">' . $user_rank['rank_position'] . '</div>
+                                <div class="user-avatar">' . $avatar_text . '</div>
+                                <div class="user-info">
+                                    <div class="username">' . sanitize($user_rank['username']) . '</div>
+                                    <div class="user-stats">';
+                        
+                        if ($user_type == 'cao_thu') {
+                            echo '<div class="stat-item">
+                                    <span>' . getRealmBadge($user_rank['realm'], $user_rank['realm_stage']) . '</span>
+                                  </div>
+                                  <div class="stat-item">
+                                    <span>⚡</span>
+                                    <span>' . number_format($user_rank['total_qi_earned']) . ' Linh Khí</span>
+                                  </div>';
+                        } else {
+                            echo '<div class="stat-item">
+                                    <span>💰</span>
+                                    <span>' . number_format($user_rank['coins']) . ' xu</span>
+                                  </div>';
+                        }
+                        
+                        echo '        </div>
+                                </div>
+                              </div>';
+                    }
+                    echo '</div>';
+                } else {
+                    echo '<div class="notification warning">Chưa có dữ liệu xếp hạng người dùng.</div>';
+                }
                 break;
 
             default:
