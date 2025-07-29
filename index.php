@@ -182,10 +182,15 @@ function getRealmBadge($realm, $stage) {
     return '<span style="background: ' . $color . '; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">' . $icon . ' ' . $realm . ' ' . $stage . '</span>';
 }
 
-function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0) {
+function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $parent_id = null, $level = 0, $context = 'general') {
     $where_clause = "WHERE parent_id " . ($parent_id ? "= $parent_id" : "IS NULL");
     if ($comic_id) $where_clause .= " AND comic_id = $comic_id";
     if ($chapter_id) $where_clause .= " AND chapter_id = $chapter_id";
+    
+    // For comic context, only show comments without chapter_id (general comic comments)
+    if ($context === 'comic' && $comic_id) {
+        $where_clause .= " AND chapter_id IS NULL";
+    }
     
     $comments = $mysqli->query("
         SELECT c.*, u.username, u.role, u.realm, u.realm_stage,
@@ -215,59 +220,22 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                         ' . getUserRoleTag($comment['role']) . '
                         ' . getRealmBadge($comment['realm'], $comment['realm_stage']) . '';
                         
-        // Display user's commented chapters info if this is a comic page
-        if ($comic_id) {
-            $user_chapters_query = $mysqli->query("
-                SELECT COUNT(DISTINCT c.chapter_id) as chapter_count,
-                       GROUP_CONCAT(DISTINCT ch.chapter_title ORDER BY ch.id ASC SEPARATOR ', ') as chapter_titles
-                FROM comments c 
-                JOIN chapters ch ON c.chapter_id = ch.id 
-                WHERE c.user_id = {$comment['user_id']} AND ch.comic_id = $comic_id
+        // Display current chapter info if this comment is on a specific chapter
+        if ($comment['chapter_id']) {
+            $current_chapter_query = $mysqli->query("
+                SELECT ch.chapter_title 
+                FROM chapters ch 
+                WHERE ch.id = {$comment['chapter_id']}
             ");
-            $chapter_data = $user_chapters_query->fetch_assoc();
-            if ($chapter_data['chapter_count'] > 0) {
-                $chapter_titles = strlen($chapter_data['chapter_titles']) > 100 ? 
-                    substr($chapter_data['chapter_titles'], 0, 100) . '...' : 
-                    $chapter_data['chapter_titles'];
-                echo '<span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold; cursor: pointer; position: relative;" 
-                            onclick="toggleChapterList(' . $comment['user_id'] . '_' . $comment['id'] . ')"
-                            title="Click để xem chi tiết các chương đã bình luận">
-                        📖 ' . $chapter_data['chapter_count'] . ' chương
+            if ($current_chapter_query && $current_chapter_query->num_rows > 0) {
+                $current_chapter = $current_chapter_query->fetch_assoc();
+                echo '<span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;" 
+                            title="Bình luận ở chapter này">
+                        📖 ' . sanitize($current_chapter['chapter_title']) . '
                       </span>';
-                      
-                // Hidden dropdown with chapter details
-                $detailed_chapters_query = $mysqli->query("
-                    SELECT DISTINCT ch.id, ch.chapter_title, COUNT(c.id) as comment_count,
-                           MAX(c.created_at) as last_comment
-                    FROM comments c 
-                    JOIN chapters ch ON c.chapter_id = ch.id 
-                    WHERE c.user_id = {$comment['user_id']} AND ch.comic_id = $comic_id
-                    GROUP BY ch.id, ch.chapter_title
-                    ORDER BY ch.id ASC
-                ");
-                
-                echo '<div id="chapter-list-' . $comment['user_id'] . '_' . $comment['id'] . '" style="display: none; position: absolute; top: 100%; left: 0; background: rgba(0,0,0,0.95); border-radius: 8px; padding: 1rem; min-width: 300px; z-index: 1000; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-                        <div style="color: #2ecc71; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.9rem;">
-                            📚 Các chương đã bình luận:
-                        </div>';
-                        
-                while ($chapter_detail = $detailed_chapters_query->fetch_assoc()) {
-                    echo '<div style="padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                            <div style="flex: 1;">
-                                <a href="?page=chapter&id=' . $chapter_detail['id'] . '" style="color: #3498db; text-decoration: none; font-size: 0.8rem;">
-                                    Chapter ' . sanitize($chapter_detail['chapter_title']) . '
-                                </a>
-                            </div>
-                            <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem;">
-                                ' . $chapter_detail['comment_count'] . ' bình luận
-                            </div>
-                          </div>';
-                }
-                
-                echo '</div>';
             }
         }
-        
+             
         echo '        ' . $pin_icon . '
                         <span style="color: rgba(255,255,255,0.6); font-size: 0.8em;">' . getTimeAgo($comment['created_at']) . '</span>
                     </div>
@@ -298,7 +266,7 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
         }
         
         // Display nested replies
-        displayComments($mysqli, $user, $comic_id, $chapter_id, $comment['id'], $level + 1);
+        displayComments($mysqli, $user, $comic_id, $chapter_id, $comment['id'], $level + 1, $context);
         
         echo '</div>';
     }
@@ -1110,8 +1078,23 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                           </div>';
                 }
                 
-                // Display comments
-                displayComments($mysqli, $user, $comic_id);
+                displayComments($mysqli, $user, $comic_id, null, null, 0, 'comic');
+                                            $chapters_with_comments = $mysqli->query("
+                    SELECT DISTINCT ch.id, ch.chapter_title, COUNT(c.id) as comment_count
+                    FROM chapters ch
+                    LEFT JOIN comments c ON c.chapter_id = ch.id
+                    WHERE ch.comic_id = $comic_id AND c.id IS NOT NULL
+                    GROUP BY ch.id, ch.chapter_title
+                    ORDER BY ch.id ASC
+                ");
+                
+                if ($chapters_with_comments && $chapters_with_comments->num_rows > 0) {
+                    while ($chapter_info = $chapters_with_comments->fetch_assoc()) {
+                        displayComments($mysqli, $user, null, $chapter_info['id'], null, 0, 'chapter');
+                    }
+                } else {
+                    echo '<div class="notification info">Chưa có bình luận nào cho các chương.</div>';
+                }
                 
                 echo '</div>';
                 break;
@@ -1237,7 +1220,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 }
                 
                 // Display comments
-                displayComments($mysqli, $user, null, $chapter_id);
+                displayComments($mysqli, $user, null, $chapter_id, null, 0, 'chapter');
                 
                 echo '</div>';
                 break;
@@ -1603,33 +1586,10 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             }
         }
         
-        // Toggle chapter list dropdown
-        function toggleChapterList(commentId) {
-            const dropdown = document.getElementById('chapter-list-' + commentId);
-            const isVisible = dropdown.style.display === 'block';
-            
-            // Hide all other chapter lists
-            document.querySelectorAll('[id^="chapter-list-"]').forEach(el => {
-                el.style.display = 'none';
-            });
-            
-            // Toggle current dropdown
-            dropdown.style.display = isVisible ? 'none' : 'block';
-            
-            // Prevent event bubbling
-            event.stopPropagation();
-        }
-        
         // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
             if (!event.target.closest('[onclick*="toggleOptions"]') && !event.target.closest('[id^="options-"]')) {
                 document.querySelectorAll('[id^="options-"]').forEach(el => {
-                    el.style.display = 'none';
-                });
-            }
-            
-            if (!event.target.closest('[onclick*="toggleChapterList"]') && !event.target.closest('[id^="chapter-list-"]')) {
-                document.querySelectorAll('[id^="chapter-list-"]').forEach(el => {
                     el.style.display = 'none';
                 });
             }
