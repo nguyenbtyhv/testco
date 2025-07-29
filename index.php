@@ -231,18 +231,11 @@ function displayComments($mysqli, $user, $comic_id = null, $chapter_id = null, $
                 $current_chapter = $current_chapter_query->fetch_assoc();
                 echo '<span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;" 
                             title="Bình luận ở chapter này">
-                        📖 Chapter ' . sanitize($current_chapter['chapter_title']) . '
+                        📖 ' . sanitize($current_chapter['chapter_title']) . '
                       </span>';
             }
         }
-        // If no chapter_id and this is a comic page, show general comment indicator
-        else if ($comic_id && !$comment['chapter_id']) {
-            echo '<span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: bold;" 
-                        title="Bình luận chung về truyện">
-                    💬 Bình luận chung
-                  </span>';
-        }
-        
+             
         echo '        ' . $pin_icon . '
                         <span style="color: rgba(255,255,255,0.6); font-size: 0.8em;">' . getTimeAgo($comment['created_at']) . '</span>
                     </div>
@@ -1085,14 +1078,8 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                           </div>';
                 }
                 
-                // Display comments with separate sections
-                echo '<h3 style="color: #3498db; margin-bottom: 1rem;">Bình luận chung về truyện</h3>';
                 displayComments($mysqli, $user, $comic_id, null, null, 0, 'comic');
-                
-                echo '<h3 style="color: #e74c3c; margin-top: 2rem; margin-bottom: 1rem;">Bình luận theo chương</h3>';
-                
-                // Get all chapters with comments for this comic
-                $chapters_with_comments = $mysqli->query("
+                                            $chapters_with_comments = $mysqli->query("
                     SELECT DISTINCT ch.id, ch.chapter_title, COUNT(c.id) as comment_count
                     FROM chapters ch
                     LEFT JOIN comments c ON c.chapter_id = ch.id
@@ -1103,17 +1090,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 
                 if ($chapters_with_comments && $chapters_with_comments->num_rows > 0) {
                     while ($chapter_info = $chapters_with_comments->fetch_assoc()) {
-                        echo '<div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; border-left: 4px solid #e74c3c;">
-                                <h4 style="color: #e74c3c; margin-bottom: 0.5rem;">
-                                    <a href="?page=chapter&id=' . $chapter_info['id'] . '" style="color: #e74c3c; text-decoration: none;">
-                                        📖 Chapter ' . sanitize($chapter_info['chapter_title']) . '
-                                    </a>
-                                    <span style="color: rgba(255,255,255,0.6); font-size: 0.8rem; margin-left: 0.5rem;">
-                                        (' . $chapter_info['comment_count'] . ' bình luận)
-                                    </span>
-                                </h4>';
                         displayComments($mysqli, $user, null, $chapter_info['id'], null, 0, 'chapter');
-                        echo '</div>';
                     }
                 } else {
                     echo '<div class="notification info">Chưa có bình luận nào cho các chương.</div>';
