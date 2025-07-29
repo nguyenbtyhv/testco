@@ -1615,7 +1615,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 $comics = $mysqli->query("SELECT * FROM comics ORDER BY updated_at DESC LIMIT 20");
                 if ($comics && $comics->num_rows > 0) {
                     while ($comic = $comics->fetch_assoc()) {
-                        $thumbnail = $comic['thumbnail'] ?: 'https://via.placeholder.com/200x250?text=No+Image';
+                        $thumbnail = $comic['thumbnail'] ?: '/assets/images/no-image.svg';
                         echo '<div class="comic-card">
                                 <a href="?page=comic&id=' . $comic['id'] . '">
                                     <div class="comic-thumbnail">
@@ -1744,7 +1744,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                 
                 echo '<h1 class="page-title">' . sanitize($comic['title']) . '</h1>';
                 echo '<div style="display: flex; gap: 2rem; margin-bottom: 2rem;">
-                        <img src="' . sanitize($comic['thumbnail'] ?: 'https://via.placeholder.com/300x400') . '" 
+                                                    <img src="' . sanitize($comic['thumbnail'] ?: '/assets/images/no-image.svg') . '" 
                              style="width: 300px; height: 400px; object-fit: cover; border-radius: 15px;">
                         <div>
                             <p><strong>Tác giả:</strong> ' . sanitize($comic['author'] ?: 'Chưa rõ') . '</p>
@@ -2118,7 +2118,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                     if ($comics && $comics->num_rows > 0) {
                         while ($comic = $comics->fetch_assoc()) {
                             echo '<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 10px;">
-                                    <img src="' . sanitize($comic['thumbnail'] ?: 'https://via.placeholder.com/60x80') . '" style="width: 60px; height: 80px; object-fit: cover; border-radius: 5px;">
+                                    <img src="' . sanitize($comic['thumbnail'] ?: '/assets/images/no-image.svg') . '" style="width: 60px; height: 80px; object-fit: cover; border-radius: 5px;">
                                     <div style="flex: 1;">
                                         <h4>' . sanitize($comic['title']) . '</h4>
                                         <p style="color: rgba(255,255,255,0.7);">' . sanitize($comic['author'] ?: 'Chưa rõ tác giả') . '</p>
@@ -2312,7 +2312,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                                                 </div>
                                             </div>
                                             <div style="flex-shrink: 0;">
-                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : 'https://via.placeholder.com/50x60/333/fff?text=No+Image') . '" 
+                                                <img src="' . ($row['thumbnail'] ? sanitize($row['thumbnail']) : '/assets/images/no-image.svg') . '" 
                                                      alt="' . sanitize($row['comic_title']) . '" 
                                                      style="width: 50px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">
                                             </div>
@@ -2615,7 +2615,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                         elseif ($ranking['rank_position'] == 3) $rank_class = 'top-3';
                         else $rank_class = 'other';
                         
-                        $thumbnail = $ranking['thumbnail'] ?: 'https://via.placeholder.com/48x60/6c63ff/fff?text=No+Image';
+                        $thumbnail = $ranking['thumbnail'] ?: '/assets/images/no-image.svg';
                         
                         echo '<div class="ranking-item">
                                 <div class="rank-number ' . $rank_class . '">' . $ranking['rank_position'] . '</div>
