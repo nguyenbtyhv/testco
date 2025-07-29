@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo - Hệ Thống Xếp Hạng Truyện</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        
+        .container {
+            max-width: 414px;
+            margin: 0 auto;
+            background: #f8f9ff;
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+            padding: 1.5rem 1rem 2rem;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 25px;
+            padding: 0.25rem;
+            margin: -1rem 1rem 0;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 0.75rem;
+            text-align: center;
+            border-radius: 20px;
+            color: #6c63ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        .nav-tab.active {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+        }
+        
+        .content {
+            padding: 2rem 1rem 1rem;
+        }
+        
+        .ranking-tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            padding: 0.25rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.1);
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            color: #6c63ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        .tab-btn.active {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+            box-shadow: 0 2px 10px rgba(108, 99, 255, 0.3);
+        }
+        
+        .ranking-list {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.1);
+        }
+        
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s ease;
+        }
+        
+        .ranking-item:hover {
+            background: linear-gradient(90deg, rgba(108, 99, 255, 0.05), rgba(156, 136, 255, 0.05));
+        }
+        
+        .ranking-item:last-child {
+            border-bottom: none;
+        }
+        
+        .rank-number {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .rank-number.top-1 {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+        
+        .rank-number.top-2 {
+            background: linear-gradient(45deg, #C0C0C0, #A8A8A8);
+            color: white;
+            box-shadow: 0 4px 15px rgba(192, 192, 192, 0.4);
+        }
+        
+        .rank-number.top-3 {
+            background: linear-gradient(45deg, #CD7F32, #B8860B);
+            color: white;
+            box-shadow: 0 4px 15px rgba(205, 127, 50, 0.4);
+        }
+        
+        .rank-number.other {
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            color: white;
+        }
+        
+        .ranking-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .ranking-thumbnail {
+            width: 3rem;
+            height: 3.5rem;
+            border-radius: 8px;
+            object-fit: cover;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+        }
+        
+        .ranking-info {
+            flex: 1;
+        }
+        
+        .ranking-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.3;
+        }
+        
+        .ranking-stats {
+            font-size: 0.75rem;
+            color: #666;
+            display: flex;
+            gap: 0.75rem;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        .user-ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .user-ranking-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(108, 99, 255, 0.15);
+        }
+        
+        .user-avatar {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #6c63ff, #9c88ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .username {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        
+        .user-stats {
+            font-size: 0.8rem;
+            color: #666;
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏆 Hệ Thống Xếp Hạng</h1>
+            <p>Theo dõi truyện hot nhất và cao thủ hàng đầu</p>
+            
+            <div class="nav-tabs">
+                <div class="nav-tab active" onclick="showTab('novels')">📚 Truyện</div>
+                <div class="nav-tab" onclick="showTab('users')">👑 Cao Thủ</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Novels Ranking Tab -->
+            <div id="novels" class="tab-content active">
+                <div class="ranking-tabs">
+                    <button class="tab-btn active" onclick="showRankingType('daily')">📅 Ngày</button>
+                    <button class="tab-btn" onclick="showRankingType('weekly')">📅 Tuần</button>
+                    <button class="tab-btn" onclick="showRankingType('monthly')">📅 Tháng</button>
+                </div>
+                
+                <div class="ranking-list" id="daily-ranking">
+                    <div class="ranking-item">
+                        <div class="rank-number top-1">1</div>
+                        <div class="ranking-content">
+                            <div class="ranking-thumbnail"></div>
+                            <div class="ranking-info">
+                                <div class="ranking-title">Thần Tướng Vô Địch</div>
+                                <div class="ranking-stats">
+                                    <div class="stat-item">
+                                        <span>👁️</span>
+                                        <span>125.5K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>❤️</span>
+                                        <span>8.2K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>💬</span>
+                                        <span>1.5K</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ranking-item">
+                        <div class="rank-number top-2">2</div>
+                        <div class="ranking-content">
+                            <div class="ranking-thumbnail"></div>
+                            <div class="ranking-info">
+                                <div class="ranking-title">Lời Túc Tình Yêu</div>
+                                <div class="ranking-stats">
+                                    <div class="stat-item">
+                                        <span>👁️</span>
+                                        <span>89.3K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>❤️</span>
+                                        <span>6.7K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>💬</span>
+                                        <span>980</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ranking-item">
+                        <div class="rank-number top-3">3</div>
+                        <div class="ranking-content">
+                            <div class="ranking-thumbnail"></div>
+                            <div class="ranking-info">
+                                <div class="ranking-title">Mặt Ngọt Bên Tai</div>
+                                <div class="ranking-stats">
+                                    <div class="stat-item">
+                                        <span>👁️</span>
+                                        <span>67.8K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>❤️</span>
+                                        <span>5.1K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>💬</span>
+                                        <span>743</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ranking-item">
+                        <div class="rank-number other">4</div>
+                        <div class="ranking-content">
+                            <div class="ranking-thumbnail"></div>
+                            <div class="ranking-info">
+                                <div class="ranking-title">Đế Vương Sinh Tử Lệnh</div>
+                                <div class="ranking-stats">
+                                    <div class="stat-item">
+                                        <span>👁️</span>
+                                        <span>54.2K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>❤️</span>
+                                        <span>4.3K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>💬</span>
+                                        <span>621</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ranking-item">
+                        <div class="rank-number other">5</div>
+                        <div class="ranking-content">
+                            <div class="ranking-thumbnail"></div>
+                            <div class="ranking-info">
+                                <div class="ranking-title">Thiên Đạo Đồ Thư Quán</div>
+                                <div class="ranking-stats">
+                                    <div class="stat-item">
+                                        <span>👁️</span>
+                                        <span>42.7K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>❤️</span>
+                                        <span>3.8K</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>💬</span>
+                                        <span>456</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Users Ranking Tab -->
+            <div id="users" class="tab-content">
+                <div class="ranking-tabs">
+                    <button class="tab-btn active" onclick="showUserType('cao_thu')">⚔️ Cao Thủ</button>
+                    <button class="tab-btn" onclick="showUserType('ty_phu')">💰 Tỷ Phú</button>
+                </div>
+                
+                <div id="cao_thu-ranking">
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-1">1</div>
+                        <div class="user-avatar">DT</div>
+                        <div class="user-info">
+                            <div class="username">DragonTiger</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>🔥 Độ Kiếp</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span>⚡</span>
+                                    <span>2.5M Linh Khí</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-2">2</div>
+                        <div class="user-avatar">IM</div>
+                        <div class="user-info">
+                            <div class="username">IronMaster</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>💫 Đại Thừa Cảnh</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span>⚡</span>
+                                    <span>1.8M Linh Khí</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-3">3</div>
+                        <div class="user-avatar">SK</div>
+                        <div class="user-info">
+                            <div class="username">SkyKing</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>✨ Hợp Thể Cảnh</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span>⚡</span>
+                                    <span>1.2M Linh Khí</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number other">4</div>
+                        <div class="user-avatar">FP</div>
+                        <div class="user-info">
+                            <div class="username">FirePhoenix</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>🌟 Luyện Hư Cảnh</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span>⚡</span>
+                                    <span>950K Linh Khí</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="ty_phu-ranking" style="display: none;">
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-1">1</div>
+                        <div class="user-avatar">GK</div>
+                        <div class="user-info">
+                            <div class="username">GoldKing</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>💰</span>
+                                    <span>15.8M xu</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-2">2</div>
+                        <div class="user-avatar">RM</div>
+                        <div class="user-info">
+                            <div class="username">RichMaster</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>💰</span>
+                                    <span>12.3M xu</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number top-3">3</div>
+                        <div class="user-avatar">DL</div>
+                        <div class="user-info">
+                            <div class="username">DiamondLord</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>💰</span>
+                                    <span>9.7M xu</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="user-ranking-item">
+                        <div class="rank-number other">4</div>
+                        <div class="user-avatar">MT</div>
+                        <div class="user-info">
+                            <div class="username">MoneyTycoon</div>
+                            <div class="user-stats">
+                                <div class="stat-item">
+                                    <span>💰</span>
+                                    <span>7.4M xu</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showTab(tabName) {
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all nav tabs
+            const navTabs = document.querySelectorAll('.nav-tab');
+            navTabs.forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked nav tab
+            event.target.classList.add('active');
+        }
+        
+        function showRankingType(type) {
+            // This would normally load different ranking data
+            const buttons = document.querySelectorAll('#novels .tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            console.log('Loading', type, 'rankings...');
+        }
+        
+        function showUserType(type) {
+            // Hide all user ranking sections
+            const userRankings = document.querySelectorAll('[id$="-ranking"]');
+            userRankings.forEach(ranking => {
+                ranking.style.display = 'none';
+            });
+            
+            // Show selected user ranking
+            document.getElementById(type + '-ranking').style.display = 'block';
+            
+            // Update tab buttons
+            const buttons = document.querySelectorAll('#users .tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            console.log('Loading', type, 'user rankings...');
+        }
+    </script>
+</body>
+</html>
