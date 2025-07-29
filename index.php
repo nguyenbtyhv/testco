@@ -758,7 +758,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MangaHub - Website Đọc Truyện Tranh</title>
+    <title>OTruyenTranh - Đọc Truyện Tranh Online</title>
     <style>
         * {
             margin: 0;
@@ -767,20 +767,20 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: #fff;
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8f9fa;
+            color: #212529;
+            line-height: 1.6;
         }
         
+        /* Header */
         .header {
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem 0;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             position: sticky;
             top: 0;
             z-index: 1000;
+            border-bottom: 1px solid #e9ecef;
         }
         
         .navbar {
@@ -789,290 +789,320 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 2rem;
+            padding: 0 1rem;
+            height: 60px;
         }
         
         .logo {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #fff;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0d6efd;
             text-decoration: none;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
         
         .nav-menu {
             display: flex;
             list-style: none;
-            gap: 2rem;
+            gap: 0;
         }
         
         .nav-link {
-            color: #fff;
+            color: #495057;
             text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            transition: all 0.3s ease;
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            border-radius: 4px;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover, .nav-link.active {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+            background: #e7f3ff;
+            color: #0d6efd;
         }
         
         .user-area {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
         }
         
+        /* Buttons */
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 25px;
-            font-weight: 600;
+            border-radius: 4px;
+            font-weight: 500;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            background: #0d6efd;
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
         
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            background: #0b5ed7;
         }
         
         .btn-outline {
             background: transparent;
-            color: #fff;
-            border: 2px solid #fff;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
         }
         
         .btn-outline:hover {
-            background: #fff;
-            color: #1e3c72;
+            background: #f8f9fa;
+            border-color: #adb5bd;
         }
         
-        .container {
+        /* Main Content */
+        .main-content {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 1.5rem 1rem;
         }
         
         .page-title {
-            font-size: 2.5rem;
-            text-align: center;
-            margin-bottom: 2rem;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #212529;
         }
         
         .section-title {
-            font-size: 1.5rem;
-            margin-bottom: 1.5rem;
-            color: #fff;
-            position: relative;
-            padding-left: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #212529;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 0.5rem;
+            display: inline-block;
         }
         
-        .section-title::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border-radius: 2px;
-        }
-        
+        /* Comic Grid */
         .comic-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
         }
         
         .comic-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
+            background: #fff;
+            border-radius: 8px;
             overflow: hidden;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s ease;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
         .comic-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-color: #0d6efd;
         }
         
         .comic-thumbnail {
             width: 100%;
-            height: 250px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .comic-thumbnail img {
-            width: 100%;
-            height: 100%;
+            height: 220px;
             object-fit: cover;
-            transition: transform 0.3s ease;
-        }
-        
-        .comic-card:hover .comic-thumbnail img {
-            transform: scale(1.1);
         }
         
         .comic-info {
-            padding: 1rem;
+            padding: 0.75rem;
         }
         
         .comic-title {
-            font-size: 1rem;
+            font-size: 0.875rem;
             font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: #fff;
+            margin-bottom: 0.25rem;
+            color: #212529;
             line-height: 1.4;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
         
         .comic-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.7);
+            color: #6c757d;
+            font-size: 0.75rem;
         }
         
-        .form-container {
-            max-width: 400px;
-            margin: 2rem auto;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 2rem;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
+        /* Forms */
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #212529;
+            font-weight: 500;
         }
         
         .form-input {
             width: 100%;
-            padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            color: #fff;
-            font-size: 1rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background: #fff;
+            color: #212529;
+            font-size: 0.875rem;
         }
         
         .form-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
+            color: #6c757d;
         }
         
         .form-input:focus {
             outline: none;
-            border-color: #4ecdc4;
-            box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
         }
         
+        /* Notifications */
         .notification {
-            padding: 1rem;
-            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
             margin-bottom: 1rem;
-            border-left: 4px solid;
+            border: 1px solid;
         }
         
         .notification.success {
-            background: rgba(46, 204, 113, 0.2);
-            border-color: #2ecc71;
-            color: #2ecc71;
+            background: #d1e7dd;
+            border-color: #badbcc;
+            color: #0f5132;
         }
         
         .notification.error {
-            background: rgba(231, 76, 60, 0.2);
-            border-color: #e74c3c;
-            color: #e74c3c;
+            background: #f8d7da;
+            border-color: #f5c2c7;
+            color: #842029;
         }
         
         .notification.warning {
-            background: rgba(241, 196, 15, 0.2);
-            border-color: #f1c40f;
-            color: #f1c40f;
+            background: #fff3cd;
+            border-color: #ffecb5;
+            color: #664d03;
         }
         
-        /* Performance optimizations */
-        img {
-            transition: opacity 0.3s ease;
+        /* Chapter List */
+        .chapter-list {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            overflow: hidden;
         }
         
-        img[data-src] {
-            opacity: 0.3;
-            filter: blur(2px);
+        .chapter-item {
+            border-bottom: 1px solid #e9ecef;
+            transition: all 0.2s ease;
         }
         
-        img.loaded {
-            opacity: 1;
-            filter: none;
+        .chapter-item:last-child {
+            border-bottom: none;
         }
         
+        .chapter-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .chapter-link {
+            color: #0d6efd;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .chapter-link:hover {
+            text-decoration: underline;
+        }
+        
+        /* Chapter Navigation */
         .chapter-navigation {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             position: sticky;
             top: 80px;
             z-index: 100;
-            backdrop-filter: blur(10px);
+        }
+        
+        .chapter-content {
+            text-align: center;
+            background: #fff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
         }
         
         .chapter-content img {
             max-width: 100%;
             height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            margin-bottom: 1rem;
-            transition: transform 0.3s ease;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
         }
         
-        .chapter-content img:hover {
-            transform: scale(1.02);
+        /* Admin Sections */
+        .admin-section {
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
         }
         
-        /* Smooth animations */
-        .chapter-item {
-            transition: all 0.3s ease;
+        .admin-nav {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #e9ecef;
         }
         
-        .chapter-item:hover {
-            background: rgba(255,255,255,0.15) !important;
-            transform: translateX(5px);
+        .tab-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: #6c757d;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
         }
         
-        /* Keyboard shortcuts help */
+        .tab-btn.active {
+            color: #0d6efd;
+            border-bottom-color: #0d6efd;
+        }
+        
+        .tab-btn:hover {
+            color: #0d6efd;
+        }
+        
+        /* VIP Elements */
+        .vip-unlock-panel {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin: 1rem 0;
+        }
+        
+        /* Keyboard Shortcuts Help */
         .shortcuts-help {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.8);
+            background: rgba(33, 37, 41, 0.9);
             color: white;
             padding: 1rem;
-            border-radius: 10px;
-            font-size: 0.8rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
             opacity: 0;
             transition: opacity 0.3s ease;
             z-index: 1000;
@@ -1082,89 +1112,46 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
             opacity: 1;
         }
         
-        .chapter-list {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            overflow: hidden;
-        }
-        
-        .chapter-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            transition: background 0.3s ease;
-        }
-        
-        .chapter-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .chapter-link {
-            color: #fff;
-            text-decoration: none;
-            font-weight: 500;
-            flex: 1;
-        }
-        
-        .chapter-link:hover {
-            color: #4ecdc4;
-        }
-        
-        .admin-section {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .admin-nav {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        
-        .tab-btn {
-            padding: 0.75rem 1.5rem;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: 10px;
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .tab-btn.active {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-        }
-        
+        /* Responsive */
         @media (max-width: 768px) {
             .navbar {
                 flex-direction: column;
-                gap: 1rem;
+                height: auto;
                 padding: 1rem;
             }
             
             .nav-menu {
-                gap: 1rem;
-            }
-            
-            .container {
-                padding: 1rem;
+                margin-top: 0.5rem;
             }
             
             .comic-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             }
             
-            .page-title {
-                font-size: 2rem;
+            .main-content {
+                padding: 1rem 0.5rem;
+            }
+            
+            .chapter-navigation {
+                flex-direction: column;
+                gap: 0.5rem;
+                position: static;
+            }
+            
+            .user-area {
+                flex-direction: column;
+                gap: 0.5rem;
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .comic-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .comic-thumbnail {
+                height: 180px;
             }
         }
     </style>
@@ -1172,7 +1159,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
 <body>
     <header class="header">
         <nav class="navbar">
-            <a href="?page=home" class="logo">🌟 MangaHub</a>
+            <a href="?page=home" class="logo">📚 OTruyenTranh</a>
             <ul class="nav-menu">
                 <li><a href="?page=home" class="nav-link <?php echo $page == 'home' ? 'active' : ''; ?>">Trang chủ</a></li>
                 <li><a href="?page=favorites" class="nav-link <?php echo $page == 'favorites' ? 'active' : ''; ?>">Theo dõi</a></li>
@@ -1202,7 +1189,7 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
         </nav>
     </header>
 
-    <main class="container">
+    <main class="main-content">
         <?php
         // Handle different pages
         switch ($page) {
@@ -1215,15 +1202,12 @@ if ($users_without_progress && $users_without_progress->num_rows > 0) {
                     while ($comic = $comics->fetch_assoc()) {
                         $thumbnail = $comic['thumbnail'] ?: 'https://via.placeholder.com/200x250?text=No+Image';
                         echo '<div class="comic-card">
-                                <a href="?page=comic&id=' . $comic['id'] . '">
-                                    <div class="comic-thumbnail">
-                                        <img src="' . sanitize($thumbnail) . '" alt="' . sanitize($comic['title']) . '">
-                                    </div>
+                                <a href="?page=comic&id=' . $comic['id'] . '" style="text-decoration: none; color: inherit;">
+                                    <img src="' . sanitize($thumbnail) . '" alt="' . sanitize($comic['title']) . '" class="comic-thumbnail">
                                     <div class="comic-info">
-                                        <h3 class="comic-title">' . sanitize($comic['title']) . '</h3>
+                                        <div class="comic-title">' . sanitize($comic['title']) . '</div>
                                         <div class="comic-meta">
-                                            <span>' . sanitize($comic['author'] ?: 'Chưa rõ') . '</span>
-                                            <span>' . number_format($comic['views']) . ' lượt xem</span>
+                                            ' . sanitize($comic['author'] ?: 'Chưa rõ') . ' • ' . number_format($comic['views']) . ' lượt xem
                                         </div>
                                     </div>
                                 </a>
